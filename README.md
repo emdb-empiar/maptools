@@ -77,5 +77,30 @@ with mrcfile.open('file.mrc', orientation=(cols='X', rows='Y', sections='Z')) as
 ```
 
 
+## Background
 
+This is where the complexity comes from.
 
+Orientation is a triple of integers: 1, 2, 3, where 1=X, 2=Y, 3=Z. Therefore, 1, 2, 3 is X, Y, Z orientation which is standard.
+
+Some files have non-standard orientations. Our goal is to transform the data so that it is presented in the standard orientation.
+This means that we have to decide on the transformation required to modify data with a particular orientation to the
+standard orientation. In general, we would like to be able to move from any orientation to any other.
+
+The transformation will be accomplished using numpy.swapaxes(arra, <index1>, <index2>)
+
+For 3D data the values of <index?> are exclusively one of: 0, 1, 2
+
+E.g. numpy.swapaxes(arr, 0, 2) means swap the first and third dimension etc.
+
+We can outline the set of possible orientations. These are permutations of (1, 2, 3). There are six (6) such permutations.
+
+For any permutation we can swap at one of two pairs of positions: (0, 1), (0, 2) and (1, 2).
+
+This means that any orientation can be converted to three other orientations by only permuting two positions.
+The two remaining orientations require at least two permutations.
+The identity permutation transforms an orientation into itself.
+
+We can graphically describe the set of permutations as a permutohedron. (see https://en.wikipedia.org/wiki/Permutohedron)
+
+Permutations may be expressed using a permutation matrix (see https://en.wikipedia.org/wiki/Permutation_matrix).

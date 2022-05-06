@@ -2,6 +2,7 @@ import random
 import unittest
 
 import numpy
+import mrcfile
 
 
 def get_vol(cols, rows, sects, dtype=numpy.uint8):
@@ -209,3 +210,35 @@ class Test(unittest.TestCase):
         new_shape = numpy.dot(numpy.array(vol.shape), permutation_matrix)
         new_vol = vol.reshape(new_shape)
         self.assertEqual((20, 30, 10), new_vol.shape)
+
+    def test_mrcfile(self):
+        """Test behaviour with mrcfile"""
+        with mrcfile.new('file.mrc', overwrite=True) as mrc:
+            mrc.set_data(numpy.zeros(shape=(10, 20, 30), dtype=numpy.float32))
+            # voxel size (isotropic)
+            # c=30,
+            mrc.voxel_size = 3.0, 2.0, 1.0
+            mrc.update_header_from_data()
+            print(f"orig shape = {mrc.data.shape}")
+            print(mrc.print_header())
+            print(f"{mrc.header.cella = }")
+            orientation = tuple(map(int, (mrc.header.mapc, mrc.header.mapr, mrc.header.maps)))
+            print(orientation)
+            print(type(int(orientation[0])))
+            new_orientation = 3, 2, 1
+            permutation_matrix = get_permutation_matrix(orientation, new_orientation)
+            print(permutation_matrix)
+            new_shape = numpy.dot(mrc.data.shape, permutation_matrix)
+            print(f"{new_shape = }")
+            # reset the data
+            mrc.set_data(mrc.data.reshape(new_shape))
+            print(f"new shape = {mrc.data.shape}")
+            # we have to also change the values of mapc, mapr, maps
+            mrc.header.mapc, mrc.header.macr, mrc.header.maps = new_orientation
+            # and mx, my, mz
+            mrc.header.mx, mrc.header.my, mrc.header.mz = new_shape
+            mrc.voxel_size = 1.0
+            # print(mrc.print_header())
+            mrc.update_header_from_data()
+            print(f"{mrc.voxel_size = }")
+

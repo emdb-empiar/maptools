@@ -223,6 +223,7 @@ class TestMapFix(unittest.TestCase):
         cls.cols, cls.rows, cls.sections = random.sample(range(10, 30), k=3)
         with mrcfile.new(cls.random_name) as mrc:
             mrc.set_data(get_vol(cls.cols, cls.rows, cls.sections))
+            mrc.voxel_size = 1.5
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -352,6 +353,41 @@ class TestMapFix(unittest.TestCase):
 
     def test_get_orientation(self):
         """"""
+        # by default, orientation is XYZ
         with mrcfile.open(self.random_name) as mrc:
             orientation = mapfix.get_orientation(mrc)
             self.assertIsInstance(orientation, mapfix.Orientation)
+            self.assertEqual('X', orientation.cols)
+            self.assertEqual('Y', orientation.rows)
+            self.assertEqual('Z', orientation.sections)
+
+    def test_set_orientation(self):
+        """"""
+        # read an mrc with xyz orientation
+        print(self.cols, self.rows, self.sections)
+        with mrcfile.open(self.random_name, 'r+') as mrc:
+            mrc.print_header()
+            # check the orientation is xyz
+            orientation = mapfix.get_orientation(mrc)
+            self.assertEqual("Orientation(cols='X', rows='Y', sections='Z')", str(orientation))
+            # check voxel size
+            print(f"{mrc.voxel_size = }")
+            # check cella
+            print(f"{mrc.header.cella = }")
+            # check dimensions
+            self.assertEqual((self.cols, self.rows, self.sections), mrc.data.shape)
+            # set it to zyx
+            mapfix.set_orientation(mrc, mapfix.Orientation(cols='Z', rows='Y', sections='X'))
+        # write it out
+        # read it afresh
+        with mrcfile.open(self.random_name) as mrc2:
+            mrc2.print_header()
+            # confirm that it behaves as it should
+            # check the orientation is xyz
+            orientation = mapfix.get_orientation(mrc2)
+            self.assertEqual("Orientation(cols='Z', rows='Y', sections='X')", str(orientation))
+            # check that dimensions are changed
+            self.assertEqual((self.sections, self.rows, self.cols), mrc2.data.shape)
+            # check that the voxel sizes are unchanged
+
+            # check that cella is changed

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import numpy
+import struct
 
 _axes = {
     1: 'X',
@@ -61,7 +62,7 @@ class Orientation:
 
     def __truediv__(self, other: Orientation):
         """Computes the permutation matrix required to convert this orientation to the specified orientation"""
-        return PermutationMatrix(get_permutation_matrix(self._data, other._data))
+        return PermutationMatrix(get_permutation_matrix(numpy.asarray(self), numpy.asarray(other)))
 
 
 class PermutationMatrix:
@@ -129,6 +130,24 @@ class PermutationMatrix:
         return numpy.array_equal(numpy.asarray(self), numpy.asarray(other))
 
 
+# todo: do away with `mrcfile`!!!
+class MAP:
+    def __init__(self, name):
+        """"""
+        self.name = name
+        self._data = None
+
+    def __enter__(self):
+        self.handle = open(self.name, 'rb')
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.handle.close
+
+
+    def __array__(self):
+        return self._data
+
 def get_orientation(mrc):
     """
     Determine the orientation of an MRC file
@@ -136,7 +155,6 @@ def get_orientation(mrc):
     :param mrc: an MRC file
     :return: a tuple
     """
-    nc, nr, ns = mrc.header.nx, mrc.header.ny, mrc.header.nz
     mapc, mapr, maps = int(mrc.header.mapc), int(mrc.header.mapr), int(mrc.header.maps)
     return Orientation(cols=_axes[mapc], rows=_axes[mapr], sections=_axes[maps])
 
@@ -148,6 +166,17 @@ def set_orientation(mrc, orientation: Orientation):
     :param orientation: 
     :return: 
     """
+    # reset the mapc, mapr, maps attributes
+    mrc.header.mapc = _raxes[orientation.cols]
+    mrc.header.mapr = _raxes[orientation.rows]
+    mrc.header.maps = _raxes[orientation.sections]
+    # reset the voxel size
+    # rotate the volume
+    current_orientation = get_orientation(mrc)
+    permutation_matrix = current_orientation / orientation
+    new_shape = numpy.array(mrc.data.shape) @ permutation_matrix
+    mrc.set_data(mrc.data.reshape(new_shape))
+    return mrc
 
 
 def get_space_handedness(mrc):

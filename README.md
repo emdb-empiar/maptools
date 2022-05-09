@@ -85,7 +85,7 @@ with mrcfile.new('file.mrc') as mrc:
 [comment]: <> (    print&#40;mrc.voxel_size&#41; # should now take into account the re-orientation)
 
 [comment]: <> (    # the voxel_size &#40;`mrc.voxel_size.&#40;x,y,z&#41;`&#41; is related to the cell size &#40;`mrc.cella.&#40;x,y,z&#41;`&#41;)
-```
+[comment]: <> ```
 
 
 ## Background

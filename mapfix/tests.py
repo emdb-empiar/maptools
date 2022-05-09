@@ -351,6 +351,25 @@ class TestMapFix(unittest.TestCase):
         permutation_matrix1 @= permutation_matrix1
         self.assertTrue(numpy.array_equal(numpy.eye(3, dtype=int), permutation_matrix1))
 
+    def test_mapfile(self):
+        """"""
+        with mapfix.MapFile(self.random_name) as mapfile:
+            print(mapfile)
+            print(numpy.asarray(mapfile).shape)
+            print(mapfile.orientation)
+            self.assertEqual('X', mapfile.orientation.cols)
+            self.assertEqual('Y', mapfile.orientation.rows)
+            self.assertEqual('Z', mapfile.orientation.sections)
+
+    def test_mapfile_reorient(self):
+        """"""
+        with mapfix.MapFile(self.random_name) as mapfile:
+            self.assertEqual("Orientation(cols='X', rows='Y', sections='Z')", str(mapfile.orientation))
+
+            with open('new-file.mrc', 'wb') as newmap:
+                mapfile.write(newmap)
+
+
     def test_get_orientation(self):
         """"""
         # by default, orientation is XYZ

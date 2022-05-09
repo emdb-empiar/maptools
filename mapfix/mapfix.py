@@ -88,7 +88,7 @@ class PermutationMatrix:
 
     @property
     def dtype(self):
-        return self.data.dtype
+        return self._data.dtype
 
     def __matmul__(self, other):
         """LHS matrix multiplication"""
@@ -126,7 +126,7 @@ class PermutationMatrix:
         return string
 
     def __eq__(self, other):
-        return numpy.array_equal(self._data, other.data)
+        return numpy.array_equal(numpy.asarray(self), numpy.asarray(other))
 
 
 def get_orientation(mrc):
@@ -168,13 +168,24 @@ def get_permutation_matrix(orientation, new_orientation):
     # orientation can be a numpy array but it must be convertible to a 3-tuple
     def _convert_numpy_array_to_tuple(array):
         try:
-            assert array.shape == (1, 3)
+            assert array.shape[0] == 1
         except AssertionError:
-            raise ValueError(f"orientation array {array} has wrong shape; must be (1, 3)")
+            raise ValueError(f"orientation array {array} has wrong shape; must be (1, n?) for any n")
         return tuple(array.flatten().tolist())
 
-    _orientation = _convert_numpy_array_to_tuple(orientation)
-    _new_orientation = _convert_numpy_array_to_tuple(new_orientation)
+    if isinstance(orientation, numpy.ndarray):
+        _orientation = _convert_numpy_array_to_tuple(orientation)
+    elif isinstance(orientation, (tuple, list, set)):
+        _orientation = tuple(orientation)
+    else:
+        raise TypeError(f"orientation must be a sequence type (tuple, list, set, or numpy.ndarray)")
+
+    if isinstance(new_orientation, numpy.ndarray):
+        _new_orientation = _convert_numpy_array_to_tuple(new_orientation)
+    elif isinstance(new_orientation, (tuple, list, set)):
+        _new_orientation = tuple(new_orientation)
+    else:
+        raise TypeError(f"new_orientation must be a sequence type (tuple, list, set, or numpy.ndarray)")
     # assert that the values in orientation are unique
     try:
         assert len(set(_orientation)) == len(_orientation)

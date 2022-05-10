@@ -1,9 +1,22 @@
 import os
 import sys
 
+from mapfix import cli, managers
+
 
 def main():
-    print(f"mapfix...")
+    args = cli.parse_args()
+    if args.command is None:
+        return os.EX_USAGE
+    try:
+        if args.command == 'view':
+            return managers.view(args)
+        elif args.command == 'edit':
+            return managers.edit(args)
+        elif args.command == 'create':
+            return managers.create(args)
+    except KeyboardInterrupt:
+        return os.EX_DATAERR
     return os.EX_OK
 
 

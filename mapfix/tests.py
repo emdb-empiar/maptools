@@ -4,10 +4,9 @@ import secrets
 import sys
 import unittest
 
-import mrcfile
 import numpy
 
-from mapfix import models
+from mapfix import models, cli
 
 
 def get_vol(cols, rows, sects, dtype=numpy.uint8):
@@ -32,6 +31,31 @@ def change_orientation(axes, vol):
         # double
         inter_vol = numpy.swapaxes(vol, 0, 1)
         return numpy.swapaxes(inter_vol, 1, 2)
+
+
+class TestCLI(unittest.TestCase):
+    def test_view(self):
+        """"""
+        args = cli.cli(f"map view file.map")
+        self.assertEqual('view', args.command)
+        self.assertEqual('file.map', args.file)
+
+    def test_edit(self):
+        args = cli.cli(f"map edit file.map")
+        self.assertEqual('edit', args.command)
+        self.assertEqual('file.map', args.file)
+        self.assertEqual('XYZ', args.orientation)
+        self.assertEqual([1.0, 1.0, 1.0], args.voxel_sizes)
+        self.assertEqual('r+', args.file_mode)
+
+    def test_create(self):
+        args = cli.cli(f"map create file.map")
+        self.assertEqual('create', args.command)
+        self.assertEqual('file.map', args.file)
+        self.assertEqual('XYZ', args.orientation)
+        self.assertEqual([1.0, 1.0, 1.0], args.voxel_sizes)
+        self.assertEqual([10, 10, 10], args.size)
+        self.assertEqual('w', args.file_mode)
 
 
 class Test(unittest.TestCase):

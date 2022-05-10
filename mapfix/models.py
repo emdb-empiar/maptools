@@ -218,6 +218,20 @@ class MapFile:
     def voxel_size(self):
         return self.x_length / self.cols, self.y_length / self.rows, self.z_length / self.sections
 
+    @voxel_size.setter
+    def voxel_size(self, vox_size):
+        if isinstance(vox_size, (int, float, )):
+            x_size, y_size, z_size = (vox_size, ) * 3
+        elif isinstance(vox_size, tuple):
+            try:
+                assert len(vox_size) == 3
+            except AssertionError:
+                raise TypeError(f"voxel size should be a number or 3-tuple: {vox_size}")
+            x_size, y_size, z_size = vox_size
+        self.x_length = self.cols * x_size
+        self.y_length = self.cols * y_size
+        self.z_length = self.cols * z_size
+
     def __init__(self, name, file_mode='r'):
         """"""
         # todo: validate file modes in ['r', 'r+' and 'w']
@@ -270,6 +284,8 @@ class MapFile:
             self._rms = struct.unpack('<f', self.handle.read(4))[0]
             # number of labels
             self._nlabl = struct.unpack('<i', self.handle.read(4))[0]
+            # orientation
+            self._orientation = Orientation.from_integers((self._mapc, self._mapr, self._maps))
             # Up to 10 user-defined labels
             for i in range(int(self._nlabl)):
                 setattr(
@@ -509,14 +525,14 @@ def get_permutation_matrix(orientation, new_orientation):
     return permutation_matrix
 
 
-def get_orientation(mrc):
+def get_orientation(mapfile):
     """
     Determine the orientation of an MRC file
 
-    :param mrc: an MRC file
+    :param mapfile: an MRC file
     :return: a tuple
     """
-    mapc, mapr, maps = int(mrc.header.mapc), int(mrc.header.mapr), int(mrc.header.maps)
+    mapc, mapr, maps = mapfile.mapc, mapfile.mapr, mapfile.maps
     return Orientation(cols=_axes[mapc], rows=_axes[mapr], sections=_axes[maps])
 
 

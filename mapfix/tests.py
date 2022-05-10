@@ -6,7 +6,7 @@ import unittest
 
 import numpy
 
-from mapfix import models, cli
+from mapfix import models, cli, managers
 
 
 def get_vol(cols, rows, sects, dtype=numpy.uint8):
@@ -47,6 +47,7 @@ class TestCLI(unittest.TestCase):
         self.assertEqual('XYZ', args.orientation)
         self.assertEqual([1.0, 1.0, 1.0], args.voxel_sizes)
         self.assertEqual('r+', args.file_mode)
+        self.assertEqual(2, args.map_mode)
 
     def test_create(self):
         args = cli.cli(f"map create file.map")
@@ -56,6 +57,31 @@ class TestCLI(unittest.TestCase):
         self.assertEqual([1.0, 1.0, 1.0], args.voxel_sizes)
         self.assertEqual([10, 10, 10], args.size)
         self.assertEqual('w', args.file_mode)
+        self.assertEqual(2, args.map_mode)
+
+
+class TestManagers(unittest.TestCase):
+    def test_view(self):
+        """"""
+        fn = f"file-{secrets.token_urlsafe(3)}.map"
+        with models.MapFile(fn, 'w') as mapfile:
+            mapfile.data = numpy.random.rand(21, 31, 14)
+        args = cli.cli(f"map view {fn}")
+        ex = managers.view(args)
+
+    def test_edit(self):
+        """"""
+        fn = f"file-{secrets.token_urlsafe(3)}.map"
+        with models.MapFile(fn, 'w') as mapfile:
+            mapfile.data = numpy.random.rand(37, 16, 62)
+        # orientation
+        args = cli.cli(f"map edit {fn} --orientation=YZX")
+        managers.edit(args)
+        with models.MapFile(fn) as mapfile2:
+            self.assertEqual((2, 3, 1), mapfile2.orientation.to_integers())
+            # todo: all the other attributes that should have been affected by the orientation
+        # managers.view(args)
+        os.remove(fn)
 
 
 class Test(unittest.TestCase):
@@ -243,12 +269,12 @@ class TestMapFix(unittest.TestCase):
     def setUpClass(cls) -> None:
 
         # random name
-        cls.random_name = f"file-{secrets.token_urlsafe(3)}.mrc"
+        cls.random_name = f"file-{secrets.token_urlsafe(3)}.mapfile"
         # random size
         cls.cols, cls.rows, cls.sections = random.sample(range(10, 30), k=3)
-        with mrcfile.new(cls.random_name) as mrc:
-            mrc.set_data(get_vol(cls.cols, cls.rows, cls.sections))
-            mrc.voxel_size = 1.5
+        with models.MapFile(cls.random_name, 'w') as mapfile:
+            mapfile.data = get_vol(cls.cols, cls.rows, cls.sections)
+            # mapfile.data = voxel_size = 1.5
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -258,36 +284,33 @@ class TestMapFix(unittest.TestCase):
         except FileNotFoundError:
             print(f"file {cls.random_name} already deleted!")
 
-    def test_mrcfile(self):
-        """Test behaviour with mrcfile"""
-        with mrcfile.new('file.mrc', overwrite=True) as mrc:
-            mrc.set_data(numpy.zeros(shape=(10, 20, 30), dtype=numpy.float32))
-            # voxel size (isotropic)
-            # c=30,
-            mrc.voxel_size = 3.0, 2.0, 1.0
-            mrc.update_header_from_data()
-            print(f"orig shape = {mrc.data.shape}")
-            print(mrc.print_header())
-            print(f"{mrc.header.cella = }")
-            orientation = tuple(map(int, (mrc.header.mapc, mrc.header.mapr, mrc.header.maps)))
-            print(orientation)
-            print(type(int(orientation[0])))
-            new_orientation = 3, 2, 1
-            permutation_matrix = models.get_permutation_matrix(orientation, new_orientation)
-            print(permutation_matrix)
-            new_shape = numpy.dot(mrc.data.shape, permutation_matrix)
-            print(f"{new_shape = }")
-            # reset the data
-            mrc.set_data(mrc.data.reshape(new_shape))
-            print(f"new shape = {mrc.data.shape}")
-            # we have to also change the values of mapc, mapr, maps
-            mrc.header.mapc, mrc.header.macr, mrc.header.maps = new_orientation
-            # and mx, my, mz
-            mrc.header.mx, mrc.header.my, mrc.header.mz = new_shape
-            mrc.voxel_size = 1.0
-            # print(mrc.print_header())
-            mrc.update_header_from_data()
-            print(f"{mrc.voxel_size = }")
+    # def test_mrcfile(self):
+    #     """Test behaviour with mrcfile"""
+    #     with models.MapFile('file.mrc') as mapfile:
+    #         mapfile.data = numpy.zeros(shape=(10, 20, 30), dtype=numpy.float32)
+    #         # voxel size (isotropic)
+    #         # c=30,
+    #         mapfile.voxel_size = (3.0, 2.0, 1.0)
+    #         print(f"orig shape = {mapfile.data.shape}")
+    #         orientation = tuple(map(int, (mapfile.header.mapc, mapfile.header.mapr, mapfile.header.maps)))
+    #         print(orientation)
+    #         print(type(int(orientation[0])))
+    #         new_orientation = 3, 2, 1
+    #         permutation_matrix = models.get_permutation_matrix(orientation, new_orientation)
+    #         print(permutation_matrix)
+    #         new_shape = numpy.dot(mapfile.data.shape, permutation_matrix)
+    #         print(f"{new_shape = }")
+    #         # reset the data
+    #         mapfile.set_data(mapfile.data.reshape(new_shape))
+    #         print(f"new shape = {mapfile.data.shape}")
+    #         # we have to also change the values of mapc, mapr, maps
+    #         mapfile.header.mapc, mapfile.header.macr, mapfile.header.maps = new_orientation
+    #         # and mx, my, mz
+    #         mapfile.header.mx, mapfile.header.my, mapfile.header.mz = new_shape
+    #         mapfile.voxel_size = 1.0
+    #         # print(mapfile.print_header())
+    #         mapfile.update_header_from_data()
+    #         print(f"{mapfile.voxel_size = }")
 
     def test_orientation(self):
         """"""
@@ -379,8 +402,8 @@ class TestMapFix(unittest.TestCase):
     def test_get_orientation(self):
         """"""
         # by default, orientation is XYZ
-        with mrcfile.open(self.random_name) as mrc:
-            orientation = models.get_orientation(mrc)
+        with models.MapFile(self.random_name) as mapfile:
+            orientation = models.get_orientation(mapfile)
             self.assertIsInstance(orientation, models.Orientation)
             self.assertEqual('X', orientation.cols)
             self.assertEqual('Y', orientation.rows)

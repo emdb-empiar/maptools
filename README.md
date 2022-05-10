@@ -33,7 +33,7 @@ It would be desirable to make it easy for users to be able to:
 ## Determine the current space orientation
 
 ```python
-with mapfix.MapFile('file.mrc') as mapfile:
+with mapfix.MapFile('file.mapfile') as mapfile:
     # assume a canonical file
     print(mapfile.orientaion)  # (cols='X', rows='Y', sections='Z')
 ```
@@ -41,14 +41,14 @@ with mapfix.MapFile('file.mrc') as mapfile:
 ## Determine the current space handedness
 
 ```python
-with mapfix.MapFile('file.mrc') as mapfile:
+with mapfix.MapFile('file.mapfile') as mapfile:
     print(mapfile.space_handedness)  # 'right' | 'left'
 ```
 
 ## Change the space orientation using a simple interface
 
 ```python
-with mapfix.MapFile('file.mrc', mode='r+') as mapfile:
+with mapfix.MapFile('file.mapfile', mode='r+') as mapfile:
     print(mapfile.orientation)  # (cols='X', rows='Y', sections='Z')
     mapfile.orientation = mapfix.Orientation(cols='Z', rows='Y', sections='X')
     print(mapfile.orientation)  # (cols='Z', rows='Y', sections='X')
@@ -57,7 +57,7 @@ with mapfix.MapFile('file.mrc', mode='r+') as mapfile:
 ## Create a file using the specified space orientation
 
 ```python
-with mapfix.MapFile('file.mrc', mode='w') as mapfile:
+with mapfix.MapFile('file.mapfile', mode='w') as mapfile:
     # set the data
     mapfile.data = numpy.empty(shape=(10, 20, 30), dtype=numpy.uint8)
     mapfile.orientation = mapfix.Orientation(cols='Y', rows='X', sections='Z')

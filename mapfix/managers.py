@@ -13,7 +13,8 @@ def view(args):
 def edit(args):
     """"""
     with models.MapFile(args.file, args.file_mode) as mapfile:
-        print(mapfile)
+        orientation = models.Orientation(**dict(zip(('cols', 'rows', 'sections'), list(args.orientation))))
+        mapfile.set_orientation(orientation)
     return os.EX_OK
 
 

@@ -40,6 +40,16 @@ size = {
     )
 }
 
+map_mode = {
+    'args': ['--map-mode'],
+    'kwargs': dict(
+        default=2,
+        type=int,
+        choices=[0, 1, 2, 3, 4, 6, 12],
+        help="the map mode sets the number of bytes per voxel [default: 2 (= 4 bytes per voxel)"
+    )
+}
+
 file_mode = {
     'args': ['--file-mode'],
     'kwargs': dict(
@@ -52,8 +62,10 @@ file_mode = {
 parser = argparse.ArgumentParser(prog="map", description="Utilities to work with EMDB MAP files")
 
 
-def _add_arg(parser_: argparse.ArgumentParser, option: dict):
+def _add_arg(parser_: argparse.ArgumentParser, option: dict, **kwargs):
     """Add options to parser"""
+    for kwarg, value in kwargs.items():
+        option['kwargs'][kwarg] = value
     return parser_.add_argument(*option['args'], **option['kwargs'])
 
 
@@ -82,6 +94,8 @@ edit_parser = subparsers.add_parser(
 _add_arg(edit_parser, file)
 _add_arg(edit_parser, orientation)
 _add_arg(edit_parser, voxel_sizes)
+_add_arg(edit_parser, file_mode, default='r+')
+_add_arg(edit_parser, map_mode)
 
 # create
 create_parser = subparsers.add_parser(
@@ -94,6 +108,8 @@ _add_arg(create_parser, file)
 _add_arg(create_parser, orientation)
 _add_arg(create_parser, voxel_sizes)
 _add_arg(create_parser, size)
+_add_arg(create_parser, file_mode, default='w')
+_add_arg(create_parser, map_mode)
 
 
 def parse_args():

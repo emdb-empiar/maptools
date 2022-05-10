@@ -1,10 +1,10 @@
 import os
 import random
 import secrets
+import sys
 import unittest
 
 import mrcfile
-import sys
 import numpy
 
 from mapfix import models
@@ -352,24 +352,6 @@ class TestMapFix(unittest.TestCase):
         permutation_matrix1 @= permutation_matrix1
         self.assertTrue(numpy.array_equal(numpy.eye(3, dtype=int), permutation_matrix1))
 
-    def test_mapfile(self):
-        """"""
-        with models.MapFile(self.random_name) as mapfile:
-            print(mapfile)
-            print(numpy.asarray(mapfile).shape)
-            print(mapfile.orientation)
-            self.assertEqual('X', mapfile.orientation.cols)
-            self.assertEqual('Y', mapfile.orientation.rows)
-            self.assertEqual('Z', mapfile.orientation.sections)
-
-    def test_mapfile_reorient(self):
-        """"""
-        with models.MapFile(self.random_name) as mapfile:
-            self.assertEqual("Orientation(cols='X', rows='Y', sections='Z')", str(mapfile.orientation))
-
-            with open('new-file.mrc', 'wb') as newmap:
-                mapfile.write(newmap)
-
     def test_get_orientation(self):
         """"""
         # by default, orientation is XYZ
@@ -379,37 +361,6 @@ class TestMapFix(unittest.TestCase):
             self.assertEqual('X', orientation.cols)
             self.assertEqual('Y', orientation.rows)
             self.assertEqual('Z', orientation.sections)
-
-    def test_set_orientation(self):
-        """"""
-        # read an mrc with xyz orientation
-        print(self.cols, self.rows, self.sections)
-        with mrcfile.open(self.random_name, 'r+') as mrc:
-            mrc.print_header()
-            # check the orientation is xyz
-            orientation = models.get_orientation(mrc)
-            self.assertEqual("Orientation(cols='X', rows='Y', sections='Z')", str(orientation))
-            # check voxel size
-            print(f"{mrc.voxel_size = }")
-            # check cella
-            print(f"{mrc.header.cella = }")
-            # check dimensions
-            self.assertEqual((self.cols, self.rows, self.sections), mrc.data.shape)
-            # set it to zyx
-            models.set_orientation(mrc, models.Orientation(cols='Z', rows='Y', sections='X'))
-        # write it out
-        # read it afresh
-        with mrcfile.open(self.random_name) as mrc2:
-            mrc2.print_header()
-            # confirm that it behaves as it should
-            # check the orientation is xyz
-            orientation = models.get_orientation(mrc2)
-            self.assertEqual("Orientation(cols='Z', rows='Y', sections='X')", str(orientation))
-            # check that dimensions are changed
-            self.assertEqual((self.sections, self.rows, self.cols), mrc2.data.shape)
-            # check that the voxel sizes are unchanged
-
-            # check that cella is changed
 
 
 class TestMapFile(unittest.TestCase):
@@ -458,7 +409,7 @@ class TestMapFile(unittest.TestCase):
                 self.assertEqual(0.0, mapfile.s31)
                 self.assertEqual(0.0, mapfile.s32)
                 self.assertEqual(0.0, mapfile.s33)
-                self.assertEqual((0, ) * 15, mapfile.extra)
+                self.assertEqual((0,) * 15, mapfile.extra)
                 self.assertEqual(b'MAP ', mapfile.map)
                 self.assertEqual(bytes([68, 68, 0, 0]), mapfile.machst)
                 self.assertEqual(0, mapfile.nlabl)
@@ -565,7 +516,7 @@ class TestMapFile(unittest.TestCase):
 
     def test_read_and_modify(self):
         """"""
-        with models.MapFile('test.map', file_mode='w') as mapfile:
+        with models.MapFile('test-other.map', file_mode='w') as mapfile:
             # set data
             mapfile.data = numpy.random.rand(10, 20, 30)  # sections, rows, cols
             self.assertEqual(30, mapfile.nc)
@@ -613,7 +564,7 @@ class TestMapFile(unittest.TestCase):
             self.assertEqual((1.0, 1.0, 1.0), mapfile.voxel_size)
 
         # read and modify
-        with models.MapFile('test.map', file_mode='r+') as mapfile2:
+        with models.MapFile('test-other.map', file_mode='r+') as mapfile2:
             self.assertEqual(30, mapfile2.nc)
             self.assertEqual(20, mapfile2.nr)
             self.assertEqual(10, mapfile2.ns)
@@ -629,5 +580,3 @@ class TestMapFile(unittest.TestCase):
             self.assertEqual(2, mapfile2.mapr)
             self.assertEqual(1, mapfile2.maps)
             print(mapfile2)
-
-

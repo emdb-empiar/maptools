@@ -135,8 +135,6 @@ class PermutationMatrix:
         return numpy.array_equal(numpy.asarray(self), numpy.asarray(other))
 
 
-# todo: do away with `mrcfile`!!!
-
 class MapFileAttribute:
     def __init__(self, name, default=None):
         self.name = name
@@ -218,7 +216,7 @@ class MapFile:
 
     @property
     def voxel_size(self):
-        return self.x_length/self.cols, self.y_length/self.rows, self.z_length/self.sections
+        return self.x_length / self.cols, self.y_length / self.rows, self.z_length / self.sections
 
     def __init__(self, name, file_mode='r'):
         """"""

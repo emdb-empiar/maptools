@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import os
+import math
 import struct
 
 import numpy
@@ -53,6 +53,9 @@ class Orientation:
             raise ValueError(f"invalid integers {integers}: only use a 3-tuple with values from {{1, 2, 3}}")
         c, r, s = integers
         return cls(cols=_axes[c], rows=_axes[r], sections=_axes[s])
+
+    def to_integers(self):
+        return _raxes[self.cols], _raxes[self.rows], _raxes[self.sections]
 
     @property
     def shape(self):
@@ -133,215 +136,297 @@ class PermutationMatrix:
 
 
 # todo: do away with `mrcfile`!!!
+
+class MapFileAttribute:
+    def __init__(self, name, default=None):
+        self.name = name
+        self.default = default
+
+    def __get__(self, instance, owner=None):
+        value = getattr(instance, self.name)
+        if value is None and self.default is not None:
+            return self.default
+        return value
+
+    def __set__(self, instance, value=None):
+        setattr(instance, self.name, value)
+
+    def __delete__(self, instance):
+        delattr(instance, self.name)
+
+
 class MapFile:
-    __slots__ = [
-        'name', 'mode', '_data', 'handle',
+    __attrs__ = [
         '_nc', '_nr', '_ns', '_mode', '_ncstart', '_nrstart', '_nsstart',
         '_nx', '_ny', '_nz', '_x_length', '_y_length', '_z_length',
         '_alpha', '_beta', '_gamma', '_mapc', '_mapr', '_maps',
         '_amin', '_amax', '_amean', '_ispg', '_nsymbt', '_lskflg',
         '_s11', '_s12', '_s13', '_s21', '_s22', '_s23', '_s31', '_s32', '_s33',
         '_t1', '_t2', '_t3', '_extra', '_map', '_machst', '_rms', '_nlabl',
-        '_label_0', '_label_1', '_label_2', '_label_3', '_label_4', '_label_5', '_label_6', '_label_7', '_label_8',
-        '_label_9',
+        # '_label_0', '_label_1', '_label_2', '_label_3', '_label_4', '_label_5', '_label_6', '_label_7', '_label_8',
+        # '_label_9',
     ]
+    # descriptors
+    nc = MapFileAttribute('_nc')
+    nr = MapFileAttribute('_nr')
+    ns = MapFileAttribute('_ns')
+    mode = MapFileAttribute('_mode', 2)
+    ncstart = MapFileAttribute('_ncstart')
+    nrstart = MapFileAttribute('_nrstart')
+    nsstart = MapFileAttribute('_nsstart')
+    nx = MapFileAttribute('_nx')
+    ny = MapFileAttribute('_ny')
+    nz = MapFileAttribute('_nz')
+    x_length = MapFileAttribute('_x_length')
+    y_length = MapFileAttribute('_y_length')
+    z_length = MapFileAttribute('_z_length')
+    alpha = MapFileAttribute('_alpha', 90.0)
+    beta = MapFileAttribute('_beta', 90.0)
+    gamma = MapFileAttribute('_gamma', 90.0)
+    mapc = MapFileAttribute('_mapc', 1)
+    mapr = MapFileAttribute('_mapr', 2)
+    maps = MapFileAttribute('_maps', 3)
+    amin = MapFileAttribute('_amin')
+    amax = MapFileAttribute('_amax')
+    amean = MapFileAttribute('_amean')
+    ispg = MapFileAttribute('_ispg', 1)
+    nsymbt = MapFileAttribute('_nsymbt', 0)
+    lskflg = MapFileAttribute('_lskflg', 0)
+    s11 = MapFileAttribute('_s11', 0.0)
+    s12 = MapFileAttribute('_s12', 0.0)
+    s13 = MapFileAttribute('_s13', 0.0)
+    s21 = MapFileAttribute('_s21', 0.0)
+    s22 = MapFileAttribute('_s22', 0.0)
+    s23 = MapFileAttribute('_s23', 0.0)
+    s31 = MapFileAttribute('_s31', 0.0)
+    s32 = MapFileAttribute('_s32', 0.0)
+    s33 = MapFileAttribute('_s33', 0.0)
+    t1 = MapFileAttribute('_t1', 0.0)
+    t2 = MapFileAttribute('_t2', 0.0)
+    t3 = MapFileAttribute('_t3', 0.0)
+    extra = MapFileAttribute('_extra', (0,) * 15)
+    map = MapFileAttribute('_map', "MAP ".encode('utf-8'))
+    machst = MapFileAttribute('_machst')
+    rms = MapFileAttribute('_rms')
+    nlabl = MapFileAttribute('_nlabl', 0)
 
-    def __init__(self, name, mode='r'):
+    def __init__(self, name, file_mode='r'):
         """"""
         # todo: validate file modes in ['r', 'r+' and 'w']
         self.name = name
-        self.mode = mode
+        self.file_mode = file_mode
         self._data = None
+        self.handle = None
+        # create attributes
+        for attr in self.__attrs__:
+            if hasattr(self, attr):
+                continue
+            setattr(self, attr, None)
 
     def __enter__(self):
-        self.handle = open(self.name, f'{self.mode}b')
-        # source: ftp://ftp.ebi.ac.uk/pub/databases/emdb/doc/Map-format/current/EMDB_map_format.pdf
-        # number of columns (fastest changing), rows, sections (slowest changing)
-        self._nc, self._nr, self._ns = struct.unpack('<iii', self.handle.read(12))
-        # voxel datatype
-        self._mode = struct.unpack('<I', self.handle.read(4))[0]
-        # position of first column, first row, and first section (voxel grid units)
-        self._ncstart, self._nrstart, self._nsstart = struct.unpack('<iii', self.handle.read(12))
-        # intervals per unit cell repeat along X,Y Z
-        self._nx, self._ny, self._nz = struct.unpack('<iii', self.handle.read(12))
-        # Unit Cell repeats along X, Y, Z In Ångstroms
-        self._x_length, self._y_length, self._z_length = struct.unpack('<fff', self.handle.read(12))
-        # Unit Cell angles (degrees)
-        self._alpha, self._beta, self._gamma = struct.unpack('<fff', self.handle.read(12))
-        # relationship of X,Y,Z axes to columns, rows, sections
-        self._mapc, self._mapr, self._maps = struct.unpack('<iii', self.handle.read(12))
-        # Minimum, maximum, average density
-        self._amin, self._amax, self._amean = struct.unpack('<fff', self.handle.read(12))
-        # space group #
-        # number of bytes in symmetry table (multiple of 80)
-        # flag for skew matrix
-        self._ispg, self._nsymbt, self._lskflg = struct.unpack('<iii', self.handle.read(12))
-        # skew matrix-S11, S12, S13, S21, S22, S23, S31, S32, S33
-        self._s11, self._s12, self._s13, self._s21, self._s22, self._s23, self._s31, self._s32, self._s33 = struct.unpack(
-            '<' + 'f' * 9, self.handle.read(9 * 4))
-        # skew translation-T1, T2, T3
-        self._t1, self._t2, self._t3 = struct.unpack('<fff', self.handle.read(12))
-        # user-defined metadata
-        self._extra = struct.unpack('<15i', self.handle.read(15 * 4))
-        # MRC/CCP4 MAP format identifier
-        self._map = struct.unpack('<4s', self.handle.read(4))[0].decode('utf-8')
-        # machine stamp
-        self._machst = struct.unpack('<4s', self.handle.read(4))[0].decode('utf-8')
-        # Density root-mean-square deviation
-        self._rms = struct.unpack('<f', self.handle.read(4))[0]
-        # number of labels
-        self._nlabl = struct.unpack('<i', self.handle.read(4))[0]
-        # Up to 10 user-defined labels
-        for i in range(int(self._nlabl)):
-            setattr(
-                self, f'_label_{i}',
-                struct.unpack('<80s', self.handle.read(80))[0].decode('utf-8').rstrip(' ')
-            )
-        # jump to the beginning of data
-        if self.handle.tell() < 1024:
-            self.handle.seek(1024)
-        else:
-            raise ValueError(f"Current byte position in file ({self.handle.tell()}) is past end of header (1024)")
+        self.handle = open(self.name, f'{self.file_mode}b')
+        if self.file_mode in ['r', 'r+']:
+            # source: ftp://ftp.ebi.ac.uk/pub/databases/emdb/doc/Map-format/current/EMDB_map_format.pdf
+            # number of columns (fastest changing), rows, sections (slowest changing)
+            self._nc, self._nr, self._ns = struct.unpack('<iii', self.handle.read(12))
+            # voxel datatype
+            self._mode = struct.unpack('<I', self.handle.read(4))[0]
+            # position of first column, first row, and first section (voxel grid units)
+            self._ncstart, self._nrstart, self._nsstart = struct.unpack('<iii', self.handle.read(12))
+            # intervals per unit cell repeat along X,Y Z
+            self._nx, self._ny, self._nz = struct.unpack('<iii', self.handle.read(12))
+            # Unit Cell repeats along X, Y, Z In Ångstroms
+            self._x_length, self._y_length, self._z_length = struct.unpack('<fff', self.handle.read(12))
+            # Unit Cell angles (degrees)
+            self._alpha, self._beta, self._gamma = struct.unpack('<fff', self.handle.read(12))
+            # relationship of X,Y,Z axes to columns, rows, sections
+            self._mapc, self._mapr, self._maps = struct.unpack('<iii', self.handle.read(12))
+            # Minimum, maximum, average density
+            self._amin, self._amax, self._amean = struct.unpack('<fff', self.handle.read(12))
+            # space group #
+            # number of bytes in symmetry table (multiple of 80)
+            # flag for skew matrix
+            self._ispg, self._nsymbt, self._lskflg = struct.unpack('<iii', self.handle.read(12))
+            # skew matrix-S11, S12, S13, S21, S22, S23, S31, S32, S33
+            self._s11, self._s12, self._s13, self._s21, self._s22, self._s23, self._s31, self._s32, self._s33 = struct.unpack(
+                '<' + 'f' * 9, self.handle.read(9 * 4))
+            # skew translation-T1, T2, T3
+            self._t1, self._t2, self._t3 = struct.unpack('<fff', self.handle.read(12))
+            # user-defined metadata
+            self._extra = struct.unpack('<15i', self.handle.read(15 * 4))
+            # MRC/CCP4 MAP format identifier
+            self._map = struct.unpack('<4s', self.handle.read(4))[0].decode('utf-8')
+            # machine stamp
+            self._machst = struct.unpack('<4s', self.handle.read(4))[0].decode('utf-8')
+            # Density root-mean-square deviation
+            self._rms = struct.unpack('<f', self.handle.read(4))[0]
+            # number of labels
+            self._nlabl = struct.unpack('<i', self.handle.read(4))[0]
+            # Up to 10 user-defined labels
+            for i in range(int(self._nlabl)):
+                setattr(
+                    self, f'_label_{i}',
+                    struct.unpack('<80s', self.handle.read(80))[0].decode('utf-8').rstrip(' ')
+                )
+            # jump to the beginning of data
+            if self.handle.tell() < 1024:
+                self.handle.seek(1024)
+            else:
+                raise ValueError(f"Current byte position in file ({self.handle.tell()}) is past end of header (1024)")
 
-        if self._mode == 0:
-            self._voxel_type = 'b'
-            self._voxel_size = 1
-        elif self._mode == 1:
-            self._voxel_type = 'h'
-            self._voxel_size = 2
-        elif self._mode == 2:
-            self._voxel_type = 'f'
-            self._voxel_size = 4
-        elif self._mode == 3:
-            raise ValueError("No support for complex signed integer Fourier maps")
-        elif self._mode == 4:
-            raise ValueError("No support for complex floating point Fourier maps")
+            if self._mode == 0:
+                self._voxel_type = 'b'
+                self._voxel_size = 1
+            elif self._mode == 1:
+                self._voxel_type = 'h'
+                self._voxel_size = 2
+            elif self._mode == 2:
+                self._voxel_type = 'f'
+                self._voxel_size = 4
+            elif self._mode == 3:
+                raise ValueError("No support for complex signed integer Fourier maps")
+            elif self._mode == 4:
+                raise ValueError("No support for complex floating point Fourier maps")
 
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Depending on the file mode, this method writes (or not) changes to disk"""
+        if self.file_mode in ['r+', 'w']:
+            self._prepare()
+            # rewind
+            self.handle.seek(0)
+            self._write_header()
+            self._write_data()
         self.handle.close()
 
-    def write(self, f):
-        """Write data to an EMDB Map file
+    def _prepare(self):
+        """Ensure that all required attributes are set before write"""
+        # make sure there is data because everything is derived from it
+        if self._data is None:
+            raise ValueError("data not provided")
+        # some attributes have default values and are excluded
+        self._ns, self._nr, self._nc = self._data.shape
+        self._mode = self._dtype_to_mode()
+        self._ncstart, self._nrstart, self._nsstart = 0, 0, 0
+        self._nz, self._ny, self._nx = self._data.shape
+        self._z_length, self._y_length, self._x_length = tuple(map(lambda d: float(d), self._data.shape))
+        self._mapc, self._mapr, self._maps = self.orientation.to_integers()
+        self._amin, self._amax, self._amean = self._data.min(), self._data.max(), self._data.mean()
+        self._machst = bytes([68, 68, 0, 0])
+        self._rms = math.sqrt(numpy.mean(numpy.square(self._data)))
 
-        :param file f: file object
-        :return int status: 0 on success; fail otherwise
-        """
+    def _dtype_to_mode(self):
+        """"""
+        dtype = numpy.asarray(self).dtype
+        if dtype.name == 'int8':
+            return 0
+        elif dtype.name == 'int16':
+            return 1
+        elif dtype.name == 'float32':
+            return 2
+        elif dtype.name == 'int32':  # i know! this should be FFT stored a complex signed integers
+            return 3
+        elif dtype.name == 'complex64':
+            return 4
+        elif dtype.name == 'uint16':
+            return 6
+        elif dtype.name == 'float16':
+            return 12
 
-        string = struct.pack('<iii', self._nc, self._nr, self._ns)
-        string += struct.pack('<I', self._mode)
-        string += struct.pack('<iii', self._ncstart, self._nrstart, self._nsstart)
-        string += struct.pack('<iii', self._nx, self._ny, self._nz)
-        string += struct.pack('<fff', self._x_length, self._y_length, self._z_length)
-        string += struct.pack('<fff', self._alpha, self._beta, self._gamma)
-        string += struct.pack('<iii', self._mapc, self._mapr, self._maps)
-        string += struct.pack('<fff', self._amin, self._amax, self._amean)
-        string += struct.pack('<iii', self._ispg, self._nsymbt, self._lskflg)
-        string += struct.pack('<' + 'f' * 9, self._s11, self._s12, self._s13, self._s21, self._s22, self._s23,
-                              self._s31, self._s32, self._s33)
-        string += struct.pack('<fff', self._t1, self._t2, self._t3)
-        string += struct.pack('<15i', *self._extra)
-        # string += struct.pack('<4c', self._map)
-        # convert to bytes
-        string += self._map.encode('utf-8')
-        string += self._machst.encode('utf-8')
-        string += struct.pack('<f', self._rms)
+    def _mode_to_dtype(self):
+        """"""
+        dtype = numpy.float32  # default
+        if self._mode == 0:
+            dtype = numpy.int8
+        elif self._mode == 1:
+            dtype = numpy.int16
+        elif self._mode == 2:
+            dtype = numpy.float32
+        elif self._mode == 3:
+            dtype = numpy.int32
+        elif self._mode == 4:
+            dtype = numpy.complex64
+        elif self._mode == 6:
+            dtype = numpy.uint16
+        elif self._mode == 12:
+            dtype = numpy.float16
+        # elif self._mode == 101:
+        #     dtype = numpy.dtype()
+        return dtype
 
-        # if inverted we will add one more label
-        # if self._inverted:
-        #     string += struct.pack('<i', self._nlabl + 1)
-        # else:
-        #     string += struct.pack('<i', self._nlabl)
+    def _write_header(self):
+        self.handle.write(struct.pack('<iii', self.nc, self.nr, self.ns))
+        self.handle.write(struct.pack('<I', self.mode))
+        self.handle.write(struct.pack('<iii', self.ncstart, self.nrstart, self.nsstart))
+        self.handle.write(struct.pack('<iii', self.nx, self.ny, self.nz))
+        self.handle.write(struct.pack('<fff', self.x_length, self.y_length, self.z_length))
+        self.handle.write(struct.pack('<fff', self.alpha, self.beta, self.gamma))
+        self.handle.write(struct.pack('<iii', self.mapc, self.mapr, self.maps))
+        self.handle.write(struct.pack('<fff', self.amin, self.amax, self.amean))
+        self.handle.write(struct.pack('<iii', self.ispg, self.nsymbt, self.lskflg))
+        self.handle.write(
+            struct.pack('<9f', self.s11, self.s12, self.s13, self.s21, self.s22, self.s23, self.s31, self.s32,
+                        self.s33, ))
+        self.handle.write(struct.pack('<fff', self.t1, self.t2, self.t3))
+        self.handle.write(struct.pack('<15i', *self.extra))
+        self.handle.write(struct.pack('<4s', self.map))
+        self.handle.write(struct.pack('<4s', self.machst))
+        self.handle.write(struct.pack('<f', self.rms))
+        self.handle.write(struct.pack('<i', self.nlabl))
 
-        for i in range(self._nlabl):
-            len_label = len(getattr(self, f'_label_{i}'))
-            encoding = getattr(self, f'_label_{i}').encode('utf-8')
-            string += encoding
-            # pack the remaining space
-            string += struct.pack(f'<{80 - len_label}x')
-
-        # todo: do something similar for fixing the orientation
-        # if self._inverted:
-        #     from datetime import datetime
-        #     d = datetime.now()
-        #     string += _encode("{:<56}{:>24}".format(
-        #         "mapfix: inverted intensities",
-        #         d.strftime("%d-%b-%y  %H:%M:%S     ")
-        #     ), 'utf-8')
-
-        # pad up to full header of 1024 bytes
-        try:
-            assert 1024 - len(string) >= 0
-        except AssertionError:
-            raise ValueError("Header is too long")
-
-        string += struct.pack(
-            '<' + str(1024 - len(string)) + 'x')  # dodgy line because we may need to move one byte forward or back
-
-        # numpy.ndarray.tofile(numpy.array(self._data))
-        # string += struct.pack('<' + self._voxel_type * self._voxel_count, *tuple(self._voxels))
-
-        f.write(string)
-        f.flush()
-
-        return os.EX_OK
+    def _write_data(self):
+        self._data.tofile(self.handle)
 
     def __array__(self):
         if self._data is None:
-            dtype = numpy.float32
-            if self._mode == 0:
-                dtype = numpy.int8
-            elif self._mode == 1:
-                dtype = numpy.float16
-            elif self._mode == 2:
-                dtype = numpy.float32
-            elif self._mode == 3:
-                dtype = numpy.complex
-            elif self._mode == 4:
-                dtype = numpy.complex
-            elif self._mode == 6:
-                dtype = numpy.uint16
+            dtype = self._mode_to_dtype()
             # byteorder
-            # dtype = dtype.newbyteorder('<')
-            self._data = numpy.frombuffer(self.handle.read(), dtype=dtype).reshape(self._ns, self._nr, self._nc)
+            self._data = numpy.frombuffer(self.handle.read(), dtype=dtype).reshape(self.ns, self.nr, self.nc)
         return self._data
+
+    @property
+    def data(self):
+        return self._data
+
+    @data.setter
+    def data(self, data):
+        self._data = data
 
     def __str__(self):
         string = f"""\
-            \rCols, rows, sections: 
-            \r    {self._nc}, {self._nr}, {self._ns}
-            \rMode: {self._mode}
-            \rStart col, row, sections: 
-            \r    {self._ncstart}, {self._nrstart}, {self._nsstart}
-            \rX, Y, Z: 
-            \r    {self._nx}, {self._ny}, {self._nz}
-            \rLengths X, Y, Z (Ångstrom): 
-            \r    {self._x_length}, {self._y_length}, {self._z_length}
-            \r\U000003b1, \U000003b2, \U000003b3: 
-            \r    {self._alpha}, {self._beta}, {self._gamma}
-            \rMap cols, rows, sections: 
-            \r    {self._mapc}, {self._mapr}, {self._maps}
-            \rDensity min, max, mean: 
-            \r    {self._amin}, {self._amax}, {self._amean}
-            \rSpace group: {self._ispg}
-            \rBytes in symmetry table: {self._nsymbt}
-            \rSkew matrix flag: {self._lskflg}
-            \rSkew matrix:
-            \r    {self._s11} {self._s12} {self._s13}
-            \r    {self._s21} {self._s22} {self._s23}
-            \r    {self._s31} {self._s32} {self._s33}
-            \rSkew translation:
-            \r    {self._t1}
-            \r    {self._t2}
-            \r    {self._t3}
-            \rExtra: {self._extra}
-            \rMap: {self._map}
-            \rMach-stamp: {self._machst}
-            \rRMS: {self._rms}
-            \rLabel count: {self._nlabl}
-            \r"""
+                \rCols, rows, sections: 
+                \r    {self._nc}, {self._nr}, {self._ns}
+                \rMode: {self._mode}
+                \rStart col, row, sections: 
+                \r    {self._ncstart}, {self._nrstart}, {self._nsstart}
+                \rX, Y, Z: 
+                \r    {self._nx}, {self._ny}, {self._nz}
+                \rLengths X, Y, Z (Ångstrom): 
+                \r    {self._x_length}, {self._y_length}, {self._z_length}
+                \r\U000003b1, \U000003b2, \U000003b3: 
+                \r    {self._alpha}, {self._beta}, {self._gamma}
+                \rMap cols, rows, sections: 
+                \r    {self._mapc}, {self._mapr}, {self._maps}
+                \rDensity min, max, mean: 
+                \r    {self._amin}, {self._amax}, {self._amean}
+                \rSpace group: {self._ispg}
+                \rBytes in symmetry table: {self._nsymbt}
+                \rSkew matrix flag: {self._lskflg}
+                \rSkew matrix:
+                \r    {self._s11} {self._s12} {self._s13}
+                \r    {self._s21} {self._s22} {self._s23}
+                \r    {self._s31} {self._s32} {self._s33}
+                \rSkew translation:
+                \r    {self._t1}
+                \r    {self._t2}
+                \r    {self._t3}
+                \rExtra: {self._extra}
+                \rMap: {self._map}
+                \rMach-stamp: {self._machst}
+                \rRMS: {self._rms}
+                \rLabel count: {self._nlabl}
+                \r"""
         # if int(self._nlabl) > 0:
         for i in range(self._nlabl):
             string += f"Label {i}: {getattr(self, f'_label_{i}')}"
@@ -353,7 +438,7 @@ class MapFile:
 
         :return:
         """
-        return Orientation(cols=_axes[self._mapc], rows=_axes[self._mapr], sections=_axes[self._maps])
+        return Orientation(cols=_axes[self.mapc], rows=_axes[self.mapr], sections=_axes[self.maps])
 
     @orientation.setter
     def orientation(self, orientation: Orientation):
@@ -362,9 +447,9 @@ class MapFile:
         :param orientation:
         :return:
         """
-        self._mapc = _raxes[orientation.cols]
-        self._mapr = _raxes[orientation.rows]
-        self._maps = _raxes[orientation.sections]
+        self.mapc = _raxes[orientation.cols]
+        self.mapr = _raxes[orientation.rows]
+        self.maps = _raxes[orientation.sections]
         # rotate the volume
         permutation_matrix = self.orientation / orientation
         # matrix multiply to get the new shape

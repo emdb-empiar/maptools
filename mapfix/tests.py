@@ -414,4 +414,17 @@ class TestMapFix(unittest.TestCase):
 class TestMapFile(unittest.TestCase):
     def test_create(self):
         """"""
-        map
+        with models.MapFile('test.map', file_mode='w') as mapfile:
+            # mapfile.data = numpy.ones(shape=(10, 10, 10), dtype=numpy.int8)
+            mapfile.data = numpy.random.rand(10, 20, 30)
+        # assertions
+        with models.MapFile('test.map') as mapfile2:
+            self.assertEqual(30, mapfile2.nc)
+            print(mapfile2)
+
+    def test_numpy_dtypes(self):
+        """"""
+        array = numpy.empty(shape=(3, 3), dtype=numpy.singlecomplex)
+        print(array)
+        print(array.dtype)
+        print(array.dtype.name)

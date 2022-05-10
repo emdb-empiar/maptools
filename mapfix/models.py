@@ -163,6 +163,7 @@ class MapFile:
         '_amin', '_amax', '_amean', '_ispg', '_nsymbt', '_lskflg',
         '_s11', '_s12', '_s13', '_s21', '_s22', '_s23', '_s31', '_s32', '_s33',
         '_t1', '_t2', '_t3', '_extra', '_map', '_machst', '_rms', '_nlabl',
+        '_orientation',
         # '_label_0', '_label_1', '_label_2', '_label_3', '_label_4', '_label_5', '_label_6', '_label_7', '_label_8',
         # '_label_9',
     ]
@@ -171,9 +172,9 @@ class MapFile:
     nr = MapFileAttribute('_nr')
     ns = MapFileAttribute('_ns')
     mode = MapFileAttribute('_mode', 2)
-    ncstart = MapFileAttribute('_ncstart')
-    nrstart = MapFileAttribute('_nrstart')
-    nsstart = MapFileAttribute('_nsstart')
+    ncstart = MapFileAttribute('_ncstart', 0)
+    nrstart = MapFileAttribute('_nrstart', 0)
+    nsstart = MapFileAttribute('_nsstart', 0)
     nx = MapFileAttribute('_nx')
     ny = MapFileAttribute('_ny')
     nz = MapFileAttribute('_nz')
@@ -205,10 +206,19 @@ class MapFile:
     t2 = MapFileAttribute('_t2', 0.0)
     t3 = MapFileAttribute('_t3', 0.0)
     extra = MapFileAttribute('_extra', (0,) * 15)
-    map = MapFileAttribute('_map', "MAP ".encode('utf-8'))
-    machst = MapFileAttribute('_machst')
+    map = MapFileAttribute('_map', b'MAP ')
+    machst = MapFileAttribute('_machst', bytes([68, 68, 0, 0]))
     rms = MapFileAttribute('_rms')
     nlabl = MapFileAttribute('_nlabl', 0)
+    # convenience properties
+    cols = MapFileAttribute('_nc')
+    rows = MapFileAttribute('_nr')
+    sections = MapFileAttribute('_ns')
+    orientation = MapFileAttribute('_orientation', Orientation(cols='X', rows='Y', sections='Z'))
+
+    @property
+    def voxel_size(self):
+        return self.x_length/self.cols, self.y_length/self.rows, self.z_length/self.sections
 
     def __init__(self, name, file_mode='r'):
         """"""
@@ -255,9 +265,9 @@ class MapFile:
             # user-defined metadata
             self._extra = struct.unpack('<15i', self.handle.read(15 * 4))
             # MRC/CCP4 MAP format identifier
-            self._map = struct.unpack('<4s', self.handle.read(4))[0].decode('utf-8')
+            self._map = struct.unpack('<4s', self.handle.read(4))[0]
             # machine stamp
-            self._machst = struct.unpack('<4s', self.handle.read(4))[0].decode('utf-8')
+            self._machst = struct.unpack('<4s', self.handle.read(4))[0]
             # Density root-mean-square deviation
             self._rms = struct.unpack('<f', self.handle.read(4))[0]
             # number of labels
@@ -274,26 +284,21 @@ class MapFile:
             else:
                 raise ValueError(f"Current byte position in file ({self.handle.tell()}) is past end of header (1024)")
 
-            if self._mode == 0:
-                self._voxel_type = 'b'
-                self._voxel_size = 1
-            elif self._mode == 1:
-                self._voxel_type = 'h'
-                self._voxel_size = 2
-            elif self._mode == 2:
-                self._voxel_type = 'f'
-                self._voxel_size = 4
-            elif self._mode == 3:
-                raise ValueError("No support for complex signed integer Fourier maps")
-            elif self._mode == 4:
-                raise ValueError("No support for complex floating point Fourier maps")
+            # read the data
+            dtype = self._mode_to_dtype()
+            # byteorder
+            self._data = numpy.frombuffer(self.handle.read(), dtype=dtype).reshape(self.ns, self.nr, self.nc)
 
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Depending on the file mode, this method writes (or not) changes to disk"""
         if self.file_mode in ['r+', 'w']:
-            self._prepare()
+            try:
+                self._prepare()
+            except UserWarning as uw:
+                self.handle.close()
+                raise ValueError(str(uw))
             # rewind
             self.handle.seek(0)
             self._write_header()
@@ -304,7 +309,7 @@ class MapFile:
         """Ensure that all required attributes are set before write"""
         # make sure there is data because everything is derived from it
         if self._data is None:
-            raise ValueError("data not provided")
+            raise UserWarning("no data to write; set MapFile.data attribute to a numpy 3D array")
         # some attributes have default values and are excluded
         self._ns, self._nr, self._nc = self._data.shape
         self._mode = self._dtype_to_mode()
@@ -313,7 +318,6 @@ class MapFile:
         self._z_length, self._y_length, self._x_length = tuple(map(lambda d: float(d), self._data.shape))
         self._mapc, self._mapr, self._maps = self.orientation.to_integers()
         self._amin, self._amax, self._amean = self._data.min(), self._data.max(), self._data.mean()
-        self._machst = bytes([68, 68, 0, 0])
         self._rms = math.sqrt(numpy.mean(numpy.square(self._data)))
 
     def _dtype_to_mode(self):
@@ -374,9 +378,14 @@ class MapFile:
         self.handle.write(struct.pack('<4s', self.machst))
         self.handle.write(struct.pack('<f', self.rms))
         self.handle.write(struct.pack('<i', self.nlabl))
+        # write the remaining blanks
+        # fixme: allow records to be added
+        self.handle.write(struct.pack(f'<800x'))
 
     def _write_data(self):
-        self._data.tofile(self.handle)
+        dtype = self._mode_to_dtype()
+        # change dtype and write
+        self._data.astype(dtype).tofile(self.handle)
 
     def __array__(self):
         if self._data is None:
@@ -391,71 +400,65 @@ class MapFile:
 
     @data.setter
     def data(self, data):
-        self._data = data
+        dtype = self._mode_to_dtype()
+        self._data = data.astype(dtype)
+        self._prepare()
 
     def __str__(self):
         string = f"""\
                 \rCols, rows, sections: 
-                \r    {self._nc}, {self._nr}, {self._ns}
-                \rMode: {self._mode}
+                \r    {self.nc}, {self.nr}, {self.ns}
+                \rMode: {self.mode}
                 \rStart col, row, sections: 
-                \r    {self._ncstart}, {self._nrstart}, {self._nsstart}
+                \r    {self.ncstart}, {self.nrstart}, {self.nsstart}
                 \rX, Y, Z: 
-                \r    {self._nx}, {self._ny}, {self._nz}
+                \r    {self.nx}, {self.ny}, {self.nz}
                 \rLengths X, Y, Z (Ångstrom): 
-                \r    {self._x_length}, {self._y_length}, {self._z_length}
+                \r    {self.x_length}, {self.y_length}, {self.z_length}
                 \r\U000003b1, \U000003b2, \U000003b3: 
-                \r    {self._alpha}, {self._beta}, {self._gamma}
+                \r    {self.alpha}, {self.beta}, {self.gamma}
                 \rMap cols, rows, sections: 
-                \r    {self._mapc}, {self._mapr}, {self._maps}
+                \r    {self.mapc}, {self.mapr}, {self.maps}
                 \rDensity min, max, mean: 
-                \r    {self._amin}, {self._amax}, {self._amean}
-                \rSpace group: {self._ispg}
-                \rBytes in symmetry table: {self._nsymbt}
-                \rSkew matrix flag: {self._lskflg}
+                \r    {self.amin}, {self.amax}, {self.amean}
+                \rSpace group: {self.ispg}
+                \rBytes in symmetry table: {self.nsymbt}
+                \rSkew matrix flag: {self.lskflg}
                 \rSkew matrix:
-                \r    {self._s11} {self._s12} {self._s13}
-                \r    {self._s21} {self._s22} {self._s23}
-                \r    {self._s31} {self._s32} {self._s33}
+                \r    {self.s11} {self.s12} {self.s13}
+                \r    {self.s21} {self.s22} {self.s23}
+                \r    {self.s31} {self.s32} {self.s33}
                 \rSkew translation:
-                \r    {self._t1}
-                \r    {self._t2}
-                \r    {self._t3}
-                \rExtra: {self._extra}
-                \rMap: {self._map}
-                \rMach-stamp: {self._machst}
-                \rRMS: {self._rms}
-                \rLabel count: {self._nlabl}
+                \r    {self.t1}
+                \r    {self.t2}
+                \r    {self.t3}
+                \rExtra: {self.extra}
+                \rMap: {self.map}
+                \rMach-stamp: {self.machst}
+                \rRMS: {self.rms}
+                \rLabel count: {self.nlabl}
                 \r"""
-        # if int(self._nlabl) > 0:
-        for i in range(self._nlabl):
+        # labels
+        for i in range(self.nlabl):
             string += f"Label {i}: {getattr(self, f'_label_{i}')}"
         return string
 
-    @property
-    def orientation(self):
-        """
-
-        :return:
-        """
-        return Orientation(cols=_axes[self.mapc], rows=_axes[self.mapr], sections=_axes[self.maps])
-
-    @orientation.setter
-    def orientation(self, orientation: Orientation):
+    def set_orientation(self, orientation: Orientation):
         """
 
         :param orientation:
         :return:
         """
-        self.mapc = _raxes[orientation.cols]
-        self.mapr = _raxes[orientation.rows]
-        self.maps = _raxes[orientation.sections]
-        # rotate the volume
+        # reorient the volume
         permutation_matrix = self.orientation / orientation
         # matrix multiply to get the new shape
-        new_shape = numpy.array(mrc.data.shape) @ permutation_matrix
+        new_shape = numpy.array(numpy.asarray(self).shape) @ permutation_matrix
         # reshape the data
-        self._data = numpy.asarray(self._data).reshape(new_shape)
+        self._data = numpy.asarray(self).reshape(new_shape)
+        # set the new orientation
+        self.orientation = orientation
+        # recalculate parameters
+        self._prepare()
 
 
 def get_permutation_matrix(orientation, new_orientation):

@@ -6,7 +6,7 @@ import unittest
 import mrcfile
 import numpy
 
-import mapfix
+from mapfix import models
 
 
 def get_vol(cols, rows, sects, dtype=numpy.uint8):
@@ -120,57 +120,57 @@ class Test(unittest.TestCase):
         self.assertTrue(
             numpy.array_equal(
                 self.p12,
-                mapfix.get_permutation_matrix((1, 2, 3), (1, 3, 2))
+                models.get_permutation_matrix((1, 2, 3), (1, 3, 2))
             )
         )
         self.assertTrue(
             numpy.array_equal(
                 self.p02,
-                mapfix.get_permutation_matrix((1, 2, 3), (3, 2, 1))
+                models.get_permutation_matrix((1, 2, 3), (3, 2, 1))
             )
         )
         self.assertTrue(
             numpy.array_equal(
                 self.p01,
-                mapfix.get_permutation_matrix((1, 2, 3), (2, 1, 3))
+                models.get_permutation_matrix((1, 2, 3), (2, 1, 3))
             )
         )
         self.assertTrue(
             numpy.array_equal(
                 numpy.dot(self.p01, self.p02),
-                mapfix.get_permutation_matrix((1, 2, 3), (3, 1, 2))
+                models.get_permutation_matrix((1, 2, 3), (3, 1, 2))
             )
         )
         self.assertTrue(
             numpy.array_equal(
                 numpy.dot(self.p02, self.p01),
-                mapfix.get_permutation_matrix((1, 2, 3), (2, 3, 1))
+                models.get_permutation_matrix((1, 2, 3), (2, 3, 1))
             )
         )
         self.assertTrue(
             numpy.array_equal(
                 numpy.dot(self.p01, self.p01),
-                mapfix.get_permutation_matrix((1, 2, 3), (1, 2, 3))
+                models.get_permutation_matrix((1, 2, 3), (1, 2, 3))
             )
         )
         # sanity checks
         with self.assertRaises(ValueError):
-            mapfix.get_permutation_matrix((1, 1, 1), (1, 2, 3))
+            models.get_permutation_matrix((1, 1, 1), (1, 2, 3))
         with self.assertRaises(ValueError):
-            mapfix.get_permutation_matrix((1, 1, 1), (1, 2, 2))
+            models.get_permutation_matrix((1, 1, 1), (1, 2, 2))
         with self.assertRaises(ValueError):
-            mapfix.get_permutation_matrix((1, 2, 3), (2, 3, 4))
+            models.get_permutation_matrix((1, 2, 3), (2, 3, 4))
 
     def test_permute_shape(self):
         """Test if permuting the shape is the same as performing a swap of axes"""
         # shape=(C,R,S), orientation=(1,2,3)
         # new_orientation=(3,2,1) => new_shape=(S,R,C)
-        # permutation_matrix = mapfix.get_permutation_matrix(orientation, new_orientation)
+        # permutation_matrix = models.get_permutation_matrix(orientation, new_orientation)
         # is it true that shape * permutation_matrix = new_shape?
         vol = get_vol(10, 20, 30)
         orientation = 1, 2, 3
         new_orientation = 3, 2, 1
-        permutation_matrix = mapfix.get_permutation_matrix(orientation, new_orientation)
+        permutation_matrix = models.get_permutation_matrix(orientation, new_orientation)
         new_shape = numpy.array(vol.shape).dot(permutation_matrix)
         # print(new_shape)
         new_vol = vol.reshape(new_shape)
@@ -179,7 +179,7 @@ class Test(unittest.TestCase):
         # new_orientation=(2,3,1) => new_shape=(C,S,R)?
         orientation = 2, 1, 3
         new_orientation = 2, 3, 1
-        permutation_matrix = mapfix.get_permutation_matrix(orientation, new_orientation)
+        permutation_matrix = models.get_permutation_matrix(orientation, new_orientation)
         new_shape = numpy.array(vol.shape).dot(permutation_matrix)
         new_vol = vol.reshape(new_shape)
         self.assertEqual((10, 30, 20), new_vol.shape)
@@ -188,14 +188,14 @@ class Test(unittest.TestCase):
         orientation = 2, 1, 3
         intermediate_orientation = 1, 2, 3
         final_orientation = 2, 3, 1
-        intermediate_permutation_matrix = mapfix.get_permutation_matrix(orientation, intermediate_orientation)
+        intermediate_permutation_matrix = models.get_permutation_matrix(orientation, intermediate_orientation)
         intermediate_shape = numpy.dot(
             numpy.array(vol.shape),
             intermediate_permutation_matrix
         )
         intermediate_vol = vol.reshape(intermediate_shape)
         self.assertEqual((20, 10, 30), intermediate_vol.shape)
-        final_permutation_matrix = mapfix.get_permutation_matrix(intermediate_orientation, final_orientation)
+        final_permutation_matrix = models.get_permutation_matrix(intermediate_orientation, final_orientation)
         final_shape = numpy.array(intermediate_vol.shape).dot(final_permutation_matrix)
         final_vol = intermediate_vol.reshape(final_shape)
         self.assertEqual((10, 30, 20), final_vol.shape)
@@ -203,7 +203,7 @@ class Test(unittest.TestCase):
         # new_orientation=(1,2,3) => new_shape=(R,S,C)
         orientation = 3, 1, 2
         new_orientation = 1, 2, 3  # double permutation
-        permutation_matrix = mapfix.get_permutation_matrix(orientation, new_orientation)
+        permutation_matrix = models.get_permutation_matrix(orientation, new_orientation)
         new_shape = numpy.dot(numpy.array(vol.shape), permutation_matrix)
         new_vol = vol.reshape(new_shape)
         self.assertEqual((20, 30, 10), new_vol.shape)
@@ -248,7 +248,7 @@ class TestMapFix(unittest.TestCase):
             print(orientation)
             print(type(int(orientation[0])))
             new_orientation = 3, 2, 1
-            permutation_matrix = mapfix.get_permutation_matrix(orientation, new_orientation)
+            permutation_matrix = models.get_permutation_matrix(orientation, new_orientation)
             print(permutation_matrix)
             new_shape = numpy.dot(mrc.data.shape, permutation_matrix)
             print(f"{new_shape = }")
@@ -266,7 +266,7 @@ class TestMapFix(unittest.TestCase):
 
     def test_orientation(self):
         """"""
-        orientation = mapfix.Orientation(cols='X', rows='Y', sections='Z')
+        orientation = models.Orientation(cols='X', rows='Y', sections='Z')
         self.assertEqual('X', orientation.cols)
         self.assertEqual('Y', orientation.rows)
         self.assertEqual('Z', orientation.sections)
@@ -276,53 +276,53 @@ class TestMapFix(unittest.TestCase):
         # initialisation errors
         # must use x, y, z
         with self.assertRaises(ValueError):
-            mapfix.Orientation(cols='W', rows='Y', sections='Z')
+            models.Orientation(cols='W', rows='Y', sections='Z')
         # can use lowercase
-        orientation = mapfix.Orientation(cols='x', rows='y', sections='z')
+        orientation = models.Orientation(cols='x', rows='y', sections='z')
         self.assertEqual('X', orientation.cols)
         self.assertEqual('Y', orientation.rows)
         self.assertEqual('Z', orientation.sections)
         # no repetition of axes
         with self.assertRaises(ValueError):
-            mapfix.Orientation(cols='X', rows='X', sections='Y')
+            models.Orientation(cols='X', rows='X', sections='Y')
         # order doesn't matter
-        orientation = mapfix.Orientation(rows='Y', sections='X', cols='Z')
+        orientation = models.Orientation(rows='Y', sections='X', cols='Z')
         self.assertEqual('Z', orientation.cols)
         self.assertEqual('Y', orientation.rows)
         self.assertEqual('X', orientation.sections)
         # create from integers using classmethod
-        orientation = mapfix.Orientation.from_integers((1, 2, 3))
+        orientation = models.Orientation.from_integers((1, 2, 3))
         self.assertEqual('X', orientation.cols)
         self.assertEqual('Y', orientation.rows)
         self.assertEqual('Z', orientation.sections)
 
     def test_orientation_ops(self):
         """"""
-        orientation1 = mapfix.Orientation(cols='X', rows='Y', sections='Z')
-        orientation2 = mapfix.Orientation(cols='X', rows='Y', sections='Z')
+        orientation1 = models.Orientation(cols='X', rows='Y', sections='Z')
+        orientation2 = models.Orientation(cols='X', rows='Y', sections='Z')
         # trivial: the identity
         permutation_matrix = orientation1 / orientation2
         print(permutation_matrix)
-        self.assertEqual(mapfix.PermutationMatrix(numpy.eye(3, dtype=int)), permutation_matrix)
+        self.assertEqual(models.PermutationMatrix(numpy.eye(3, dtype=int)), permutation_matrix)
         # swap X and Z
-        orientation1 = mapfix.Orientation(cols='X', rows='Y', sections='Z')
-        orientation2 = mapfix.Orientation(cols='Z', rows='Y', sections='X')
+        orientation1 = models.Orientation(cols='X', rows='Y', sections='Z')
+        orientation2 = models.Orientation(cols='Z', rows='Y', sections='X')
         permutation_matrix = orientation1 / orientation2
         print(permutation_matrix)
-        self.assertEqual(mapfix.PermutationMatrix(numpy.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]], dtype=int)),
+        self.assertEqual(models.PermutationMatrix(numpy.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]], dtype=int)),
                          permutation_matrix)
         # Z Y X -> Z X Y
-        orientation1 = mapfix.Orientation(cols='Z', rows='Y', sections='X')
-        orientation2 = mapfix.Orientation(cols='Z', rows='X', sections='Y')
+        orientation1 = models.Orientation(cols='Z', rows='Y', sections='X')
+        orientation2 = models.Orientation(cols='Z', rows='X', sections='Y')
         permutation_matrix = orientation1 / orientation2
         print(permutation_matrix)
-        self.assertEqual(mapfix.PermutationMatrix(numpy.array([[1, 0, 0], [0, 0, 1], [0, 1, 0]], dtype=int)),
+        self.assertEqual(models.PermutationMatrix(numpy.array([[1, 0, 0], [0, 0, 1], [0, 1, 0]], dtype=int)),
                          permutation_matrix)
 
     def test_permutation_matrix(self):
         """"""
-        permutation_matrix = mapfix.PermutationMatrix(numpy.eye(3, dtype=float))
-        self.assertIsInstance(permutation_matrix, mapfix.PermutationMatrix)
+        permutation_matrix = models.PermutationMatrix(numpy.eye(3, dtype=float))
+        self.assertIsInstance(permutation_matrix, models.PermutationMatrix)
         self.assertEqual((3, 3), permutation_matrix.shape)
         self.assertEqual(3, permutation_matrix.rows)
         self.assertEqual(3, permutation_matrix.cols)
@@ -330,13 +330,13 @@ class TestMapFix(unittest.TestCase):
         # invalid data
         # non-binary
         with self.assertRaises(ValueError):
-            mapfix.PermutationMatrix(
+            models.PermutationMatrix(
                 numpy.fromstring('1 0 0 0 2 0 0 0 1', sep=' ').reshape(3, 3)
             )
 
     def test_permutation_matrix_ops(self):
         """"""
-        permutation_matrix1 = mapfix.PermutationMatrix(
+        permutation_matrix1 = models.PermutationMatrix(
             numpy.fromstring('0 1 0 1 0 0 0 0 1', sep=' ', dtype=int).reshape(3, 3)
         )
         # LHS multiplication
@@ -353,7 +353,7 @@ class TestMapFix(unittest.TestCase):
 
     def test_mapfile(self):
         """"""
-        with mapfix.MapFile(self.random_name) as mapfile:
+        with models.MapFile(self.random_name) as mapfile:
             print(mapfile)
             print(numpy.asarray(mapfile).shape)
             print(mapfile.orientation)
@@ -363,19 +363,18 @@ class TestMapFix(unittest.TestCase):
 
     def test_mapfile_reorient(self):
         """"""
-        with mapfix.MapFile(self.random_name) as mapfile:
+        with models.MapFile(self.random_name) as mapfile:
             self.assertEqual("Orientation(cols='X', rows='Y', sections='Z')", str(mapfile.orientation))
 
             with open('new-file.mrc', 'wb') as newmap:
                 mapfile.write(newmap)
 
-
     def test_get_orientation(self):
         """"""
         # by default, orientation is XYZ
         with mrcfile.open(self.random_name) as mrc:
-            orientation = mapfix.get_orientation(mrc)
-            self.assertIsInstance(orientation, mapfix.Orientation)
+            orientation = models.get_orientation(mrc)
+            self.assertIsInstance(orientation, models.Orientation)
             self.assertEqual('X', orientation.cols)
             self.assertEqual('Y', orientation.rows)
             self.assertEqual('Z', orientation.sections)
@@ -387,7 +386,7 @@ class TestMapFix(unittest.TestCase):
         with mrcfile.open(self.random_name, 'r+') as mrc:
             mrc.print_header()
             # check the orientation is xyz
-            orientation = mapfix.get_orientation(mrc)
+            orientation = models.get_orientation(mrc)
             self.assertEqual("Orientation(cols='X', rows='Y', sections='Z')", str(orientation))
             # check voxel size
             print(f"{mrc.voxel_size = }")
@@ -396,17 +395,23 @@ class TestMapFix(unittest.TestCase):
             # check dimensions
             self.assertEqual((self.cols, self.rows, self.sections), mrc.data.shape)
             # set it to zyx
-            mapfix.set_orientation(mrc, mapfix.Orientation(cols='Z', rows='Y', sections='X'))
+            models.set_orientation(mrc, models.Orientation(cols='Z', rows='Y', sections='X'))
         # write it out
         # read it afresh
         with mrcfile.open(self.random_name) as mrc2:
             mrc2.print_header()
             # confirm that it behaves as it should
             # check the orientation is xyz
-            orientation = mapfix.get_orientation(mrc2)
+            orientation = models.get_orientation(mrc2)
             self.assertEqual("Orientation(cols='Z', rows='Y', sections='X')", str(orientation))
             # check that dimensions are changed
             self.assertEqual((self.sections, self.rows, self.cols), mrc2.data.shape)
             # check that the voxel sizes are unchanged
 
             # check that cella is changed
+
+
+class TestMapFile(unittest.TestCase):
+    def test_create(self):
+        """"""
+        map

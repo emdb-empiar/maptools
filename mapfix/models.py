@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import struct
 
 import numpy
@@ -133,14 +134,27 @@ class PermutationMatrix:
 
 # todo: do away with `mrcfile`!!!
 class MapFile:
-    def __init__(self, name):
+    __slots__ = [
+        'name', 'mode', '_data', 'handle',
+        '_nc', '_nr', '_ns', '_mode', '_ncstart', '_nrstart', '_nsstart',
+        '_nx', '_ny', '_nz', '_x_length', '_y_length', '_z_length',
+        '_alpha', '_beta', '_gamma', '_mapc', '_mapr', '_maps',
+        '_amin', '_amax', '_amean', '_ispg', '_nsymbt', '_lskflg',
+        '_s11', '_s12', '_s13', '_s21', '_s22', '_s23', '_s31', '_s32', '_s33',
+        '_t1', '_t2', '_t3', '_extra', '_map', '_machst', '_rms', '_nlabl',
+        '_label_0', '_label_1', '_label_2', '_label_3', '_label_4', '_label_5', '_label_6', '_label_7', '_label_8',
+        '_label_9',
+    ]
+
+    def __init__(self, name, mode='r'):
         """"""
+        # todo: validate file modes in ['r', 'r+' and 'w']
         self.name = name
+        self.mode = mode
         self._data = None
-        # attributes
 
     def __enter__(self):
-        self.handle = open(self.name, 'rb')
+        self.handle = open(self.name, f'{self.mode}b')
         # source: ftp://ftp.ebi.ac.uk/pub/databases/emdb/doc/Map-format/current/EMDB_map_format.pdf
         # number of columns (fastest changing), rows, sections (slowest changing)
         self._nc, self._nr, self._ns = struct.unpack('<iii', self.handle.read(12))
@@ -164,7 +178,7 @@ class MapFile:
         self._ispg, self._nsymbt, self._lskflg = struct.unpack('<iii', self.handle.read(12))
         # skew matrix-S11, S12, S13, S21, S22, S23, S31, S32, S33
         self._s11, self._s12, self._s13, self._s21, self._s22, self._s23, self._s31, self._s32, self._s33 = struct.unpack(
-            '<' + 'f' * (9), self.handle.read(9 * 4))
+            '<' + 'f' * 9, self.handle.read(9 * 4))
         # skew translation-T1, T2, T3
         self._t1, self._t2, self._t3 = struct.unpack('<fff', self.handle.read(12))
         # user-defined metadata
@@ -206,6 +220,7 @@ class MapFile:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """Depending on the file mode, this method writes (or not) changes to disk"""
         self.handle.close()
 
     def write(self, f):
@@ -224,7 +239,7 @@ class MapFile:
         string += struct.pack('<iii', self._mapc, self._mapr, self._maps)
         string += struct.pack('<fff', self._amin, self._amax, self._amean)
         string += struct.pack('<iii', self._ispg, self._nsymbt, self._lskflg)
-        string += struct.pack('<' + 'f' * (9), self._s11, self._s12, self._s13, self._s21, self._s22, self._s23,
+        string += struct.pack('<' + 'f' * 9, self._s11, self._s12, self._s13, self._s21, self._s22, self._s23,
                               self._s31, self._s32, self._s33)
         string += struct.pack('<fff', self._t1, self._t2, self._t3)
         string += struct.pack('<15i', *self._extra)
@@ -245,7 +260,7 @@ class MapFile:
             encoding = getattr(self, f'_label_{i}').encode('utf-8')
             string += encoding
             # pack the remaining space
-            string += struct.pack(f'<{80-len_label}x')
+            string += struct.pack(f'<{80 - len_label}x')
 
         # todo: do something similar for fixing the orientation
         # if self._inverted:
@@ -266,7 +281,7 @@ class MapFile:
             '<' + str(1024 - len(string)) + 'x')  # dodgy line because we may need to move one byte forward or back
 
         # numpy.ndarray.tofile(numpy.array(self._data))
-        string += struct.pack('<' + self._voxel_type * self._voxel_count, *tuple(self._voxels))
+        # string += struct.pack('<' + self._voxel_type * self._voxel_count, *tuple(self._voxels))
 
         f.write(string)
         f.flush()
@@ -358,45 +373,6 @@ class MapFile:
         self._data = numpy.asarray(self._data).reshape(new_shape)
 
 
-def get_orientation(mrc):
-    """
-    Determine the orientation of an MRC file
-
-    :param mrc: an MRC file
-    :return: a tuple
-    """
-    mapc, mapr, maps = int(mrc.header.mapc), int(mrc.header.mapr), int(mrc.header.maps)
-    return Orientation(cols=_axes[mapc], rows=_axes[mapr], sections=_axes[maps])
-
-
-def set_orientation(mrc, orientation: Orientation):
-    """
-
-    :param mrc:  an MRC file
-    :param orientation:
-    :return:
-    """
-    # reset the mapc, mapr, maps attributes
-    mrc.header.mapc = _raxes[orientation.cols]
-    mrc.header.mapr = _raxes[orientation.rows]
-    mrc.header.maps = _raxes[orientation.sections]
-    # reset the voxel size
-    # rotate the volume
-    current_orientation = get_orientation(mrc)
-    permutation_matrix = current_orientation / orientation
-    new_shape = numpy.array(mrc.data.shape) @ permutation_matrix
-    mrc.set_data(mrc.data.reshape(new_shape))
-    return mrc
-
-
-def get_space_handedness(mrc):
-    """
-
-    :param mrc: an MRC file
-    :return:
-    """
-
-
 def get_permutation_matrix(orientation, new_orientation):
     """Compute the permutation matrix required to convert the sequence <orientation> to <new_orientation>
 
@@ -445,3 +421,42 @@ def get_permutation_matrix(orientation, new_orientation):
     for index, value in enumerate(_orientation):
         permutation_matrix[index, _new_orientation.index(value)] = 1
     return permutation_matrix
+
+
+def get_orientation(mrc):
+    """
+    Determine the orientation of an MRC file
+
+    :param mrc: an MRC file
+    :return: a tuple
+    """
+    mapc, mapr, maps = int(mrc.header.mapc), int(mrc.header.mapr), int(mrc.header.maps)
+    return Orientation(cols=_axes[mapc], rows=_axes[mapr], sections=_axes[maps])
+
+
+def set_orientation(mrc, orientation: Orientation):
+    """
+
+    :param mrc:  an MRC file
+    :param orientation:
+    :return:
+    """
+    # reset the mapc, mapr, maps attributes
+    mrc.header.mapc = _raxes[orientation.cols]
+    mrc.header.mapr = _raxes[orientation.rows]
+    mrc.header.maps = _raxes[orientation.sections]
+    # reset the voxel size
+    # rotate the volume
+    current_orientation = get_orientation(mrc)
+    permutation_matrix = current_orientation / orientation
+    new_shape = numpy.array(mrc.data.shape) @ permutation_matrix
+    mrc.set_data(mrc.data.reshape(new_shape))
+    return mrc
+
+
+def get_space_handedness(mrc):
+    """
+
+    :param mrc: an MRC file
+    :return:
+    """

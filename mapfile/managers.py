@@ -5,7 +5,7 @@ from mapfile import models
 
 def view(args):
     """"""
-    with models.MapFile(args.file) as mapf:
+    with models.MapFile(args.file, colour=args.colour) as mapf:
         print(mapf)
     return os.EX_OK
 

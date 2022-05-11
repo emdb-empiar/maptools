@@ -75,6 +75,8 @@ def _add_arg(parser_: argparse.ArgumentParser, option: dict, **kwargs):
 parent_parser = argparse.ArgumentParser(add_help=False)
 parent_parser.add_argument('-v', '--verbose', default=False, action='store_true',
                            help="verbose output to terminal in addition to log files [default: False]")
+parent_parser.add_argument('--colour', default=False, action='store_true',
+                           help="highlight with colours [default: False]")
 
 subparsers = parser.add_subparsers(dest='command', title='Commands available')
 

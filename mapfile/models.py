@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import math
 import struct
+import unicodedata
 
 import numpy
+from styled import Styled
+
 from mapfile import cli
+
 _axes = {
     1: 'X',
     2: 'Y',
@@ -58,7 +62,8 @@ class Orientation:
     def from_string(cls, orientation_string: str):
         """"""
         try:
-            set(orientation_string.upper()).intersection({'X', 'Y', 'Z'}) == {'X', 'Y', 'Z'} and len(orientation_string) == 3
+            set(orientation_string.upper()).intersection({'X', 'Y', 'Z'}) == {'X', 'Y', 'Z'} and len(
+                orientation_string) == 3
         except AssertionError:
             raise ValueError(f"invalid orientation string {orientation_string}: only use a string with XYZ only")
         c, r, s = tuple(orientation_string)
@@ -279,32 +284,8 @@ class MapFile:
     rows = MapFileAttribute('_nr')
     sections = MapFileAttribute('_ns')
 
-    @property
-    def voxel_size(self):
-        """"""
-        return self._voxel_size
-
-    @voxel_size.setter
-    def voxel_size(self, vox_size):
-        if isinstance(vox_size, (int, float,)):
-            x_size, y_size, z_size = (vox_size,) * 3
-        elif isinstance(vox_size, (tuple, list, set)):
-            try:
-                assert len(vox_size) == 3
-            except AssertionError:
-                raise TypeError(f"voxel size should be a number or 3-tuple: {vox_size}")
-            x_size, y_size, z_size = vox_size
-        elif isinstance(vox_size, numpy.ndarray):
-            try:
-                assert vox_size.shape == (3,)
-            except AssertionError:
-                raise TypeError(f"voxel size should be an array of shape (3, )")
-            x_size, y_size, z_size = vox_size
-        self._voxel_size = x_size, y_size, z_size
-        self._prepare()
-
     def __init__(self, name, file_mode='r', orientation=Orientation(cols='X', rows='Y', sections='Z'),
-                 voxel_size=(1.0, 1.0, 1.0), map_mode=2):
+                 voxel_size=(1.0, 1.0, 1.0), map_mode=2, colour=True):
         """"""
         # todo: validate file modes in ['r', 'r+' and 'w']
         self.name = name
@@ -313,7 +294,7 @@ class MapFile:
         self._orientation = orientation
         self._voxel_size = tuple(
             numpy.array(voxel_size) @ PermutationMatrix.from_orientations(
-                (1, 2, 3), # always start from the default
+                (1, 2, 3),  # always start from the default
                 orientation.to_integers()
             ).tolist()
         )
@@ -325,6 +306,8 @@ class MapFile:
             setattr(self, attr, None)
         # reset the map mode
         self._mode = map_mode
+        # colour
+        self.colour = colour
 
     def __enter__(self):
         self.handle = open(self.name, f'{self.file_mode}b')
@@ -399,6 +382,98 @@ class MapFile:
             self._write_header()
             self._write_data()
         self.handle.close()
+
+    def __array__(self):
+        if self._data is None:
+            dtype = self._mode_to_dtype()
+            # byteorder
+            self._data = numpy.frombuffer(self.handle.read(), dtype=dtype).reshape(self.ns, self.nr, self.nc)
+        return self._data
+
+    @property
+    def mode(self):
+        return self._mode
+
+    @mode.setter
+    def mode(self, value):
+        try:
+            assert value in cli.MAP_MODES
+        except AssertionError:
+            raise ValueError(f"invalid mode={value}; should be one of {', '.join(cli.MAP_MODES)}")
+        if self._mode in cli.INT_MAP_MODES and value in cli.FLOAT_MAP_MODES:
+            raise UserWarning(f"potential increase in file size by converting from int to float voxels")
+        elif self._mode in cli.FLOAT_MAP_MODES and value in cli.INT_MAP_MODES:
+            raise UserWarning(f"truncating data by converting from float to int voxels")
+        self._mode = value
+        self._prepare()
+
+    @property
+    def data(self):
+        return self._data
+
+    @data.setter
+    def data(self, data):
+        dtype = self._mode_to_dtype()
+        self._data = data.astype(dtype)
+        self._prepare()
+
+    @property
+    def voxel_size(self):
+        """"""
+        return self._voxel_size
+
+    @voxel_size.setter
+    def voxel_size(self, vox_size):
+        if isinstance(vox_size, (int, float,)):
+            x_size, y_size, z_size = (vox_size,) * 3
+        elif isinstance(vox_size, (tuple, list, set)):
+            try:
+                assert len(vox_size) == 3
+            except AssertionError:
+                raise TypeError(f"voxel size should be a number or 3-tuple: {vox_size}")
+            x_size, y_size, z_size = vox_size
+        elif isinstance(vox_size, numpy.ndarray):
+            try:
+                assert vox_size.shape == (3,)
+            except AssertionError:
+                raise TypeError(f"voxel size should be an array of shape (3, )")
+            x_size, y_size, z_size = vox_size
+        self._voxel_size = x_size, y_size, z_size
+        self._prepare()
+
+    @property
+    def orientation(self):
+        return self._orientation
+
+    @orientation.setter
+    def orientation(self, orientation: Orientation):
+        """
+        Change the orientation according to the provided Orientation object specified.
+
+        We infer the permutation matrix by 'dividing' the current orientation by the specified orientation.
+        This orientation will permute (C,R,S) to the desired arrangement. However, since the array shape is in the
+        order (S,R,C) we must first reverse the shape so as to permute the correct axes. After reversing,
+        we permute then reverse the new shape before applying it to the data.
+
+        :param orientation: the new orientation
+        """
+        # reorient the volume
+        permutation_matrix = self.orientation / orientation
+        # matrix multiply to get the new shape
+        # we have to reverse the shape to apply the permutation
+        reversed_current_shape = numpy.asarray(self).shape[::-1]
+        # get the reverse of the new shape
+        reversed_new_shape = reversed_current_shape @ permutation_matrix
+        # reverse to get the actual shape to abe applied
+        new_shape = reversed_new_shape[::-1]
+        # reshape the data
+        self._data = numpy.asarray(self).reshape(new_shape)
+        # set the new orientation
+        self._orientation = orientation
+        # also permute the voxel sizes
+        self.voxel_size = self.voxel_size @ permutation_matrix
+        # recalculate parameters
+        self._prepare()
 
     def _prepare(self):
         """Ensure that all required attributes are set before write"""
@@ -485,109 +560,61 @@ class MapFile:
         # change dtype and write
         self._data.astype(dtype).tofile(self.handle)
 
-    def __array__(self):
-        if self._data is None:
-            dtype = self._mode_to_dtype()
-            # byteorder
-            self._data = numpy.frombuffer(self.handle.read(), dtype=dtype).reshape(self.ns, self.nr, self.nc)
-        return self._data
-
-    @property
-    def mode(self):
-        return self._mode
-
-    @mode.setter
-    def mode(self, value):
-        try:
-            assert value in cli.MAP_MODES
-        except AssertionError:
-            raise ValueError(f"invalid mode={value}; should be one of {', '.join(cli.MAP_MODES)}")
-        if self._mode in cli.INT_MAP_MODES and value in cli.FLOAT_MAP_MODES:
-            raise UserWarning(f"potential increase in file size by converting from int to float voxels")
-        elif self._mode in cli.FLOAT_MAP_MODES and value in cli.INT_MAP_MODES:
-            raise UserWarning(f"truncating data by converting from float to int voxels")
-        self._mode = value
-        self._prepare()
-
-    @property
-    def data(self):
-        return self._data
-
-    @data.setter
-    def data(self, data):
-        dtype = self._mode_to_dtype()
-        self._data = data.astype(dtype)
-        self._prepare()
-
     def __str__(self):
-        string = f"""\
-                \rCols, rows, sections: 
-                \r    {self.nc}, {self.nr}, {self.ns}
-                \rMode: {self.mode}
-                \rStart col, row, sections: 
-                \r    {self.ncstart}, {self.nrstart}, {self.nsstart}
-                \rX, Y, Z: 
-                \r    {self.nx}, {self.ny}, {self.nz}
-                \rLengths X, Y, Z (Ångstrom): 
-                \r    {self.x_length}, {self.y_length}, {self.z_length}
-                \r\U000003b1, \U000003b2, \U000003b3: 
-                \r    {self.alpha}, {self.beta}, {self.gamma}
-                \rMap cols, rows, sections: 
-                \r    {self.mapc}, {self.mapr}, {self.maps}
-                \rDensity min, max, mean: 
-                \r    {self.amin}, {self.amax}, {self.amean}
-                \rSpace group: {self.ispg}
-                \rBytes in symmetry table: {self.nsymbt}
-                \rSkew matrix flag: {self.lskflg}
-                \rSkew matrix:
-                \r    {self.s11} {self.s12} {self.s13}
-                \r    {self.s21} {self.s22} {self.s23}
-                \r    {self.s31} {self.s32} {self.s33}
-                \rSkew translation:
-                \r    {self.t1}
-                \r    {self.t2}
-                \r    {self.t3}
-                \rExtra: {self.extra}
-                \rMap: {self.map}
-                \rMach-stamp: {self.machst}
-                \rRMS: {self.rms}
-                \rLabel count: {self.nlabl}
-                \r"""
+        alpha = unicodedata.lookup('GREEK SMALL LETTER ALPHA')
+        beta = unicodedata.lookup('GREEK SMALL LETTER BETA')
+        gamma = unicodedata.lookup('GREEK SMALL LETTER GAMMA')
+        if self.colour:
+            bold_yellow = lambda t: Styled(f"[[ '{t:<40}'|bold:fg-white:no-end ]]")
+            bold_green = lambda t: Styled(f"[[ '{t:<40}'|bold:fg-green:no-end ]]")
+            string = f"""\
+                \r{bold_yellow('Cols, rows, sections:')}{self.nc, self.nr, self.ns}
+                \r{bold_green('Mode:')}{self.mode} ({self._mode_to_dtype()})
+                \r{bold_yellow('Start col, row, sections:')}({self.ncstart}, {self.nrstart}, {self.nsstart})
+                \r{bold_green('X, Y, Z:')}({self.nx}, {self.ny}, {self.nz})
+                \r{bold_yellow('Voxel size:')}({self.voxel_size})
+                \r{bold_green('Lengths X, Y, Z (Ångstrom):')}{self.x_length}, {self.y_length}, {self.z_length}
+                \r{bold_yellow(f'{alpha}, {beta}, {gamma}:')}'{self.alpha}, {self.beta}, {self.gamma}
+                \r{bold_green('Map cols, rows, sections:')}{self.mapc}, {self.mapr}, {self.maps}
+                \r{bold_yellow('Density min, max, mean:')}{self.amin:6f}, {self.amax:6f}, {self.amean:6f}
+                \r{bold_green('Space group:')}{self.ispg}
+                \r{bold_yellow('Bytes in symmetry table:')}{self.nsymbt}
+                \r{bold_green('Skew matrix flag:')}{self.lskflg}
+                \r{bold_yellow('Skew matrix:')}{self.s11} {self.s12} {self.s13}
+                \r{bold_green('')}{self.s21} {self.s22} {self.s23}
+                \r{bold_yellow('')}{self.s31} {self.s32} {self.s33}
+                \r{bold_green('Skew translation:')}({self.t1}, {self.t2}, {self.t3})
+                \r{bold_yellow('Extra:')}{self.extra}
+                \r{bold_green('Map:')}{self.map}
+                \r{bold_yellow('Mach-stamp:')}{self.machst}
+                \r{bold_green('RMS:')}{self.rms}
+                \r{bold_yellow('Number of labels:')}{self.nlabl}"""
+            string += str(Styled("[[ ''|yes-end ]]"))
+        else:
+            plain = lambda t: f"{t:<40}"
+            string = f"""\
+                \r{plain('Cols, rows, sections:')}{self.nc, self.nr, self.ns}
+                \r{plain('Mode:')}{self.mode} ({self._mode_to_dtype()})
+                \r{plain('Start col, row, sections:')}({self.ncstart}, {self.nrstart}, {self.nsstart})
+                \r{plain('X, Y, Z:')}({self.nx}, {self.ny}, {self.nz})
+                \r{plain('Voxel size:')}({self.voxel_size})
+                \r{plain('Lengths X, Y, Z (Ångstrom):')}{self.x_length}, {self.y_length}, {self.z_length}
+                \r{plain(f'{alpha}, {beta}, {gamma}:')}'{self.alpha}, {self.beta}, {self.gamma}
+                \r{plain('Map cols, rows, sections:')}{self.mapc}, {self.mapr}, {self.maps}
+                \r{plain('Density min, max, mean:')}{self.amin:6f}, {self.amax:6f}, {self.amean:6f}
+                \r{plain('Space group:')}{self.ispg}
+                \r{plain('Bytes in symmetry table:')}{self.nsymbt}
+                \r{plain('Skew matrix flag:')}{self.lskflg}
+                \r{plain('Skew matrix:')}{self.s11} {self.s12} {self.s13}
+                \r{plain('')}{self.s21} {self.s22} {self.s23}
+                \r{plain('')}{self.s31} {self.s32} {self.s33}
+                \r{plain('Skew translation:')}({self.t1}, {self.t2}, {self.t3})
+                \r{plain('Extra:')}{self.extra}
+                \r{plain('Map:')}{self.map}
+                \r{plain('Mach-stamp:')}{self.machst}
+                \r{plain('RMS:')}{self.rms}
+                \r{plain('Number of labels:')}{self.nlabl}"""
         # labels
         for i in range(self.nlabl):
             string += f"Label {i}: {getattr(self, f'_label_{i}')}"
         return string
-
-    @property
-    def orientation(self):
-        return self._orientation
-
-    @orientation.setter
-    def orientation(self, orientation: Orientation):
-        """
-        Change the orientation according to the provided Orientation object specified.
-
-        We infer the permutation matrix by 'dividing' the current orientation by the specified orientation.
-        This orientation will permute (C,R,S) to the desired arrangement. However, since the array shape is in the
-        order (S,R,C) we must first reverse the shape so as to permute the correct axes. After reversing,
-        we permute then reverse the new shape before applying it to the data.
-
-        :param orientation: the new orientation
-        """
-        # reorient the volume
-        permutation_matrix = self.orientation / orientation
-        # matrix multiply to get the new shape
-        # we have to reverse the shape to apply the permutation
-        reversed_current_shape = numpy.asarray(self).shape[::-1]
-        # get the reverse of the new shape
-        reversed_new_shape = reversed_current_shape @ permutation_matrix
-        # reverse to get the actual shape to abe applied
-        new_shape = reversed_new_shape[::-1]
-        # reshape the data
-        self._data = numpy.asarray(self).reshape(new_shape)
-        # set the new orientation
-        self._orientation = orientation
-        # also permute the voxel sizes
-        self.voxel_size = self.voxel_size @ permutation_matrix
-        # recalculate parameters
-        self._prepare()

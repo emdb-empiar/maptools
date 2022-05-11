@@ -115,6 +115,9 @@ _add_arg(create_parser, map_mode)
 def parse_args():
     """Parse CLI args"""
     args = parser.parse_args()
+    if args.command is None:
+        parser.print_help()
+        return args
     return args
 
 

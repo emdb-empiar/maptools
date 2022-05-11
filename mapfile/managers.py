@@ -1,6 +1,6 @@
 import os
 
-from mapfix import models
+from mapfile import models
 
 
 def view(args):

@@ -1,10 +1,3 @@
-import os
-import sys
+from mapfile.models import MapFile
 
-
-def main():
-    return os.EX_OK
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+__all__ = [MapFile]

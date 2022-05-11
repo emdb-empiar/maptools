@@ -1,7 +1,7 @@
 import os
 import sys
 
-from mapfix import cli, managers
+from mapfile import cli, managers
 
 
 def main():

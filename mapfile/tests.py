@@ -6,7 +6,7 @@ import unittest
 
 import numpy
 
-from mapfix import models, cli, managers
+from mapfile import models, cli, managers
 
 
 def get_vol(cols, rows, sects, dtype=numpy.uint8):
@@ -260,9 +260,9 @@ class Test(unittest.TestCase):
         self.assertEqual((20, 30, 10), new_vol.shape)
 
 
-class TestMapFix(unittest.TestCase):
+class TestMapfile(unittest.TestCase):
     """
-    `mapfix` provides a simple API to
+    `mapfile` provides a simple API to
     """
 
     @classmethod

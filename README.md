@@ -1,4 +1,4 @@
-# `mapfix`
+# `mapfile`
 
 The content of this package sets out to solve the complexity associated with MRC file space orientations. An MRC file is
 designed to capture multidimensional images with most common being 3D images. As with any image format, the user is at
@@ -22,7 +22,7 @@ It would be desirable to make it easy for users to be able to:
 
 > :bulb: **Note**: All examples below assume that the `mrcfile` package has been imported using:
 > ```python
-> import mapfix
+> import mapfile
 > ```
 
 > :bulb: **Note**: It may be necessary to come up with another name for this attribute e.g.
@@ -33,7 +33,7 @@ It would be desirable to make it easy for users to be able to:
 ## Determine the current space orientation
 
 ```python
-with mapfix.MapFile('file.mapfile') as mapfile:
+with mapfile.MapFile('file.mapfile') as mapfile:
     # assume a canonical file
     print(mapfile.orientaion)  # (cols='X', rows='Y', sections='Z')
 ```
@@ -41,26 +41,26 @@ with mapfix.MapFile('file.mapfile') as mapfile:
 ## Determine the current space handedness
 
 ```python
-with mapfix.MapFile('file.mapfile') as mapfile:
+with mapfile.MapFile('file.mapfile') as mapfile:
     print(mapfile.space_handedness)  # 'right' | 'left'
 ```
 
 ## Change the space orientation using a simple interface
 
 ```python
-with mapfix.MapFile('file.mapfile', mode='r+') as mapfile:
+with mapfile.MapFile('file.mapfile', mode='r+') as mapfile:
     print(mapfile.orientation)  # (cols='X', rows='Y', sections='Z')
-    mapfile.orientation = mapfix.Orientation(cols='Z', rows='Y', sections='X')
+    mapfile.orientation = mapfile.Orientation(cols='Z', rows='Y', sections='X')
     print(mapfile.orientation)  # (cols='Z', rows='Y', sections='X')
 ```
 
 ## Create a file using the specified space orientation
 
 ```python
-with mapfix.MapFile('file.mapfile', mode='w') as mapfile:
+with mapfile.MapFile('file.mapfile', mode='w') as mapfile:
     # set the data
     mapfile.data = numpy.empty(shape=(10, 20, 30), dtype=numpy.uint8)
-    mapfile.orientation = mapfix.Orientation(cols='Y', rows='X', sections='Z')
+    mapfile.orientation = mapfile.Orientation(cols='Y', rows='X', sections='Z')
     # will set nc,nr,ns=(10, 20, 30) and mapc,mapr,maps=(2, 1, 3)
     mapfile.voxel_size = 1.83 # isotropic
 ```

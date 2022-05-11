@@ -268,11 +268,11 @@ class MapFile:
     cols = MapFileAttribute('_nc')
     rows = MapFileAttribute('_nr')
     sections = MapFileAttribute('_ns')
-    # orientation = MapFileAttribute('_orientation', Orientation(cols='X', rows='Y', sections='Z'))
 
     @property
     def voxel_size(self):
-        return self.x_length / self.cols, self.y_length / self.rows, self.z_length / self.sections
+        """"""
+        return self._voxel_size
 
     @voxel_size.setter
     def voxel_size(self, vox_size):
@@ -284,17 +284,23 @@ class MapFile:
             except AssertionError:
                 raise TypeError(f"voxel size should be a number or 3-tuple: {vox_size}")
             x_size, y_size, z_size = vox_size
-        self.x_length = self.cols * x_size
-        self.y_length = self.cols * y_size
-        self.z_length = self.cols * z_size
+        elif isinstance(vox_size, numpy.ndarray):
+            try:
+                assert vox_size.shape == (3,)
+            except AssertionError:
+                raise TypeError(f"voxel size should be an array of shape (3, )")
+            x_size, y_size, z_size = vox_size
+        self._voxel_size = x_size, y_size, z_size
+        self._prepare()
 
-    def __init__(self, name, file_mode='r', orientation=Orientation(cols='X', rows='Y', sections='Z')):
+    def __init__(self, name, file_mode='r', orientation=Orientation(cols='X', rows='Y', sections='Z'), voxel_size=(1.0, 1.0, 1.0)):
         """"""
         # todo: validate file modes in ['r', 'r+' and 'w']
         self.name = name
         self.file_mode = file_mode
         self._data = None
         self._orientation = orientation
+        self._voxel_size = voxel_size
         self.handle = None
         # create attributes
         for attr in self.__attrs__:
@@ -386,7 +392,7 @@ class MapFile:
         self._mode = self._dtype_to_mode()
         self._ncstart, self._nrstart, self._nsstart = 0, 0, 0
         self._nz, self._ny, self._nx = self._data.shape
-        self._z_length, self._y_length, self._x_length = tuple(map(lambda d: float(d), self._data.shape))
+        self._z_length, self._y_length, self._x_length = numpy.multiply(self._data.shape, numpy.array(self._voxel_size)[::-1])
         self._mapc, self._mapr, self._maps = self.orientation.to_integers()
         self._amin, self._amax, self._amean = self._data.min(), self._data.max(), self._data.mean()
         self._rms = math.sqrt(numpy.mean(numpy.square(self._data)))
@@ -543,5 +549,7 @@ class MapFile:
         self._data = numpy.asarray(self).reshape(new_shape)
         # set the new orientation
         self._orientation = orientation
+        # also permute the voxel sizes
+        self.voxel_size = self.voxel_size @ permutation_matrix
         # recalculate parameters
         self._prepare()

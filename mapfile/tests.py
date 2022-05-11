@@ -221,14 +221,16 @@ class TestExperiments(unittest.TestCase):
         orientation = 2, 1, 3
         intermediate_orientation = 1, 2, 3
         final_orientation = 2, 3, 1
-        intermediate_permutation_matrix = models.PermutationMatrix.from_orientations(orientation, intermediate_orientation)
+        intermediate_permutation_matrix = models.PermutationMatrix.from_orientations(orientation,
+                                                                                     intermediate_orientation)
         intermediate_shape = numpy.dot(
             numpy.array(vol.shape),
             intermediate_permutation_matrix
         )
         intermediate_vol = vol.reshape(intermediate_shape)
         self.assertEqual((20, 10, 30), intermediate_vol.shape)
-        final_permutation_matrix = models.PermutationMatrix.from_orientations(intermediate_orientation, final_orientation)
+        final_permutation_matrix = models.PermutationMatrix.from_orientations(intermediate_orientation,
+                                                                              final_orientation)
         final_shape = numpy.array(intermediate_vol.shape).dot(final_permutation_matrix)
         final_vol = intermediate_vol.reshape(final_shape)
         self.assertEqual((10, 30, 20), final_vol.shape)
@@ -693,9 +695,38 @@ class TestMapFile(unittest.TestCase):
         # examine the voxel size
         with mapfile.MapFile(self.test_fn, file_mode='w') as mapf:
             mapf.data = numpy.random.rand(3, 4, 5)
+            # x=1.7, y=2.4, z=9.3
+            # X=8.5, Y=9.6, Z=27.9
+            mapf.voxel_size = 1.7, 2.4, 9.3
+            self.assertEqual(8.5, mapf.x_length)
+            self.assertEqual(9.6, mapf.y_length)
+            self.assertAlmostEqual(27.9, mapf.z_length)
+            # what if we change the orientation to ZYX
+            mapf.orientation = models.Orientation(cols='Z', rows='Y', sections='X')
+            # the voxel sizes also get permuted
+            self.assertEqual((9.3, 2.4, 1.7), mapf.voxel_size)
+            # but the lengths should change because we now have a different number of voxels on the same length
+            self.assertAlmostEqual(27.9, mapf.x_length)
+            self.assertEqual(9.6, mapf.y_length)
+            self.assertAlmostEqual(8.5, mapf.z_length)
 
-    def test_create_with_nonstardard(self):
+    def test_create_anisotropic_voxels(self):
+        # create with anisotropic voxel sizes
+        with mapfile.MapFile(self.test_fn, 'w', voxel_size=(3.7, 2.6, 1.5)) as mapf:
+            mapf.data = numpy.random.rand(12, 22, 17)
+            print(mapf)
+            self.assertTrue(False)
+
+    def test_create_with_nonstardard_and_anisotropic(self):
         """"""
+        with mapfile.MapFile(
+                self.test_fn, 'w',
+                orientation=models.Orientation(cols='Y', rows='Z', sections='X'),
+                voxel_size=(3.7, 2.6, 1.5)
+        ) as mapf:
+            mapf.data = numpy.random.rand(12, 22, 17)
+            print(mapf)
+            self.assertTrue(False)
 
 
 class TestUtils(unittest.TestCase):

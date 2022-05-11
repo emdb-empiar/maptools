@@ -30,7 +30,7 @@ class Orientation:
         except AssertionError:
             raise ValueError(f"cols, rows, sections must be one of {', '.join(_axes.values())}")
         # ensure values are unique
-        _full_axes_set = {'X', 'Y', 'Z'}
+        _full_axes_set = {'X', 'Y', 'Z'}  # fixme: might redundant
         _axes_set = set([_cols, _rows, _sections])
         try:
             assert len(_axes_set) == 3
@@ -67,7 +67,8 @@ class Orientation:
 
     def __truediv__(self, other: Orientation):
         """Computes the permutation matrix required to convert this orientation to the specified orientation"""
-        return PermutationMatrix(get_permutation_matrix(numpy.asarray(self), numpy.asarray(other)))
+        return PermutationMatrix.from_orientations(self, other)
+        # return PermutationMatrix(get_permutation_matrix(numpy.asarray(self), numpy.asarray(other)))
 
 
 class PermutationMatrix:
@@ -84,6 +85,61 @@ class PermutationMatrix:
         self.rows, self.cols = data.shape
         # dtype
         self._data.dtype = int
+
+    @classmethod
+    def from_orientations(cls, orientation: [tuple | list | set | numpy.ndarray | Orientation],
+                          new_orientation: [tuple | list | set | numpy.ndarray | Orientation]):
+        """Compute the permutation matrix required to convert the sequence <orientation> to <new_orientation>
+
+        A permutation matrix is a square matrix.
+        The values of its elements are in {0, 1}.
+        """
+
+        # orientation can be a numpy array but it must be convertible to a 3-tuple
+        def _convert_numpy_array_to_tuple(array):
+            try:
+                assert array.shape[0] == 1
+            except AssertionError:
+                raise ValueError(f"orientation array {array} has wrong shape; must be (1, n?) for any n")
+            return tuple(array.flatten().tolist())
+
+        if isinstance(orientation, numpy.ndarray):
+            _orientation = _convert_numpy_array_to_tuple(orientation)
+        elif isinstance(orientation, (tuple, list, set)):
+            _orientation = tuple(orientation)
+        elif isinstance(orientation, Orientation):
+            _orientation = orientation.to_integers()
+        else:
+            raise TypeError(f"orientation must be a sequence type (tuple, list, set, or numpy.ndarray)")
+
+        if isinstance(new_orientation, numpy.ndarray):
+            _new_orientation = _convert_numpy_array_to_tuple(new_orientation)
+        elif isinstance(new_orientation, (tuple, list, set)):
+            _new_orientation = tuple(new_orientation)
+        elif isinstance(new_orientation, Orientation):
+            _new_orientation = new_orientation.to_integers()
+        else:
+            raise TypeError(f"new_orientation must be a sequence type (tuple, list, set, or numpy.ndarray)")
+        # assert that the values in orientation are unique
+        try:
+            assert len(set(_orientation)) == len(_orientation)
+        except AssertionError:
+            raise ValueError(f"repeated elements in {_orientation}")
+        # assert that the values in new_orientation are unique
+        try:
+            assert len(set(_new_orientation)) == len(_new_orientation)
+        except AssertionError:
+            raise ValueError(f"repeated elements in {_new_orientation}")
+        # assert that the values in orientation are exactly those in new_orientation
+        try:
+            assert len(set(_orientation)) == len(set(_new_orientation))
+        except AssertionError:
+            raise ValueError(f"values differ: {_orientation} vs. {_new_orientation}")
+        # compute the permutation matrix
+        permutation_matrix = numpy.zeros((len(_orientation), len(_orientation)), dtype=int)
+        for index, value in enumerate(_orientation):
+            permutation_matrix[index, _new_orientation.index(value)] = 1
+        return permutation_matrix
 
     def __array__(self):
         return self._data
@@ -161,7 +217,7 @@ class MapFile:
         '_amin', '_amax', '_amean', '_ispg', '_nsymbt', '_lskflg',
         '_s11', '_s12', '_s13', '_s21', '_s22', '_s23', '_s31', '_s32', '_s33',
         '_t1', '_t2', '_t3', '_extra', '_map', '_machst', '_rms', '_nlabl',
-        '_orientation',
+        # '_orientation',
         # '_label_0', '_label_1', '_label_2', '_label_3', '_label_4', '_label_5', '_label_6', '_label_7', '_label_8',
         # '_label_9',
     ]
@@ -212,7 +268,7 @@ class MapFile:
     cols = MapFileAttribute('_nc')
     rows = MapFileAttribute('_nr')
     sections = MapFileAttribute('_ns')
-    orientation = MapFileAttribute('_orientation', Orientation(cols='X', rows='Y', sections='Z'))
+    # orientation = MapFileAttribute('_orientation', Orientation(cols='X', rows='Y', sections='Z'))
 
     @property
     def voxel_size(self):
@@ -220,8 +276,8 @@ class MapFile:
 
     @voxel_size.setter
     def voxel_size(self, vox_size):
-        if isinstance(vox_size, (int, float, )):
-            x_size, y_size, z_size = (vox_size, ) * 3
+        if isinstance(vox_size, (int, float,)):
+            x_size, y_size, z_size = (vox_size,) * 3
         elif isinstance(vox_size, tuple):
             try:
                 assert len(vox_size) == 3
@@ -232,12 +288,13 @@ class MapFile:
         self.y_length = self.cols * y_size
         self.z_length = self.cols * z_size
 
-    def __init__(self, name, file_mode='r'):
+    def __init__(self, name, file_mode='r', orientation=Orientation(cols='X', rows='Y', sections='Z')):
         """"""
         # todo: validate file modes in ['r', 'r+' and 'w']
         self.name = name
         self.file_mode = file_mode
         self._data = None
+        self._orientation = orientation
         self.handle = None
         # create attributes
         for attr in self.__attrs__:
@@ -355,19 +412,19 @@ class MapFile:
     def _mode_to_dtype(self):
         """"""
         dtype = numpy.float32  # default
-        if self._mode == 0:
+        if self.mode == 0:
             dtype = numpy.int8
-        elif self._mode == 1:
+        elif self.mode == 1:
             dtype = numpy.int16
-        elif self._mode == 2:
+        elif self.mode == 2:
             dtype = numpy.float32
-        elif self._mode == 3:
+        elif self.mode == 3:
             dtype = numpy.int32
-        elif self._mode == 4:
+        elif self.mode == 4:
             dtype = numpy.complex64
-        elif self._mode == 6:
+        elif self.mode == 6:
             dtype = numpy.uint16
-        elif self._mode == 12:
+        elif self.mode == 12:
             dtype = numpy.float16
         # elif self._mode == 101:
         #     dtype = numpy.dtype()
@@ -457,108 +514,34 @@ class MapFile:
             string += f"Label {i}: {getattr(self, f'_label_{i}')}"
         return string
 
-    def set_orientation(self, orientation: Orientation):
-        """
+    @property
+    def orientation(self):
+        return self._orientation
 
-        :param orientation:
-        :return:
+    @orientation.setter
+    def orientation(self, orientation: Orientation):
+        """
+        Change the orientation according to the provided Orientation object specified.
+
+        We infer the permutation matrix by 'dividing' the current orientation by the specified orientation.
+        This orientation will permute (C,R,S) to the desired arrangement. However, since the array shape is in the
+        order (S,R,C) we must first reverse the shape so as to permute the correct axes. After reversing,
+        we permute then reverse the new shape before applying it to the data.
+
+        :param orientation: the new orientation
         """
         # reorient the volume
         permutation_matrix = self.orientation / orientation
         # matrix multiply to get the new shape
-        new_shape = numpy.array(numpy.asarray(self).shape) @ permutation_matrix
+        # we have to reverse the shape to apply the permutation
+        reversed_current_shape = numpy.asarray(self).shape[::-1]
+        # get the reverse of the new shape
+        reversed_new_shape = reversed_current_shape @ permutation_matrix
+        # reverse to get the actual shape to abe applied
+        new_shape = reversed_new_shape[::-1]
         # reshape the data
         self._data = numpy.asarray(self).reshape(new_shape)
         # set the new orientation
-        self.orientation = orientation
+        self._orientation = orientation
         # recalculate parameters
         self._prepare()
-
-
-def get_permutation_matrix(orientation, new_orientation):
-    """Compute the permutation matrix required to convert the sequence <orientation> to <new_orientation>
-
-    A permutation matrix is a square matrix.
-    The values of its elements are in {0, 1}.
-    """
-
-    # orientation can be a numpy array but it must be convertible to a 3-tuple
-    def _convert_numpy_array_to_tuple(array):
-        try:
-            assert array.shape[0] == 1
-        except AssertionError:
-            raise ValueError(f"orientation array {array} has wrong shape; must be (1, n?) for any n")
-        return tuple(array.flatten().tolist())
-
-    if isinstance(orientation, numpy.ndarray):
-        _orientation = _convert_numpy_array_to_tuple(orientation)
-    elif isinstance(orientation, (tuple, list, set)):
-        _orientation = tuple(orientation)
-    else:
-        raise TypeError(f"orientation must be a sequence type (tuple, list, set, or numpy.ndarray)")
-
-    if isinstance(new_orientation, numpy.ndarray):
-        _new_orientation = _convert_numpy_array_to_tuple(new_orientation)
-    elif isinstance(new_orientation, (tuple, list, set)):
-        _new_orientation = tuple(new_orientation)
-    else:
-        raise TypeError(f"new_orientation must be a sequence type (tuple, list, set, or numpy.ndarray)")
-    # assert that the values in orientation are unique
-    try:
-        assert len(set(_orientation)) == len(_orientation)
-    except AssertionError:
-        raise ValueError(f"repeated elements in {_orientation}")
-    # assert that the values in new_orientation are unique
-    try:
-        assert len(set(_new_orientation)) == len(_new_orientation)
-    except AssertionError:
-        raise ValueError(f"repeated elements in {_new_orientation}")
-    # assert that the values in orientation are exactly those in new_orientation
-    try:
-        assert len(set(_orientation)) == len(set(_new_orientation))
-    except AssertionError:
-        raise ValueError(f"values differ: {_orientation} vs. {_new_orientation}")
-    # compute the permutation matrix
-    permutation_matrix = numpy.zeros((len(_orientation), len(_orientation)), dtype=int)
-    for index, value in enumerate(_orientation):
-        permutation_matrix[index, _new_orientation.index(value)] = 1
-    return permutation_matrix
-
-
-def get_orientation(mapfile):
-    """
-    Determine the orientation of an MRC file
-
-    :param mapfile: an MRC file
-    :return: a tuple
-    """
-    mapc, mapr, maps = mapfile.mapc, mapfile.mapr, mapfile.maps
-    return Orientation(cols=_axes[mapc], rows=_axes[mapr], sections=_axes[maps])
-
-
-def set_orientation(mrc, orientation: Orientation):
-    """
-
-    :param mrc:  an MRC file
-    :param orientation:
-    :return:
-    """
-    # reset the mapc, mapr, maps attributes
-    mrc.header.mapc = _raxes[orientation.cols]
-    mrc.header.mapr = _raxes[orientation.rows]
-    mrc.header.maps = _raxes[orientation.sections]
-    # reset the voxel size
-    # rotate the volume
-    current_orientation = get_orientation(mrc)
-    permutation_matrix = current_orientation / orientation
-    new_shape = numpy.array(mrc.data.shape) @ permutation_matrix
-    mrc.set_data(mrc.data.reshape(new_shape))
-    return mrc
-
-
-def get_space_handedness(mrc):
-    """
-
-    :param mrc: an MRC file
-    :return:
-    """

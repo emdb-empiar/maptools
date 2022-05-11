@@ -14,7 +14,7 @@ def edit(args):
     """"""
     with models.MapFile(args.file, args.file_mode) as mapfile:
         orientation = models.Orientation(**dict(zip(('cols', 'rows', 'sections'), list(args.orientation))))
-        mapfile.set_orientation(orientation)
+        mapfile.orientation = orientation
     return os.EX_OK
 
 

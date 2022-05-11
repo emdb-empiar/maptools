@@ -39,6 +39,10 @@ class TestCLI(unittest.TestCase):
         self.assertEqual([10, 10, 10], args.size)
         self.assertEqual('w', args.file_mode)
         self.assertEqual(2, args.map_mode)
+        self.assertEqual(0, args.min)
+        self.assertEqual(10, args.max)
+        self.assertTrue(args.zeros)
+
 
 
 class TestManagers(unittest.TestCase):
@@ -299,6 +303,11 @@ class TestOrientation(unittest.TestCase):
         self.assertEqual('X', orientation.cols)
         self.assertEqual('Y', orientation.rows)
         self.assertEqual('Z', orientation.sections)
+        # create from string using classmethod
+        orientation = models.Orientation.from_string('YxZ')
+        self.assertEqual('Y', orientation.cols)
+        self.assertEqual('X', orientation.rows)
+        self.assertEqual('Z', orientation.sections)
 
     def test_orientation_ops(self):
         """"""
@@ -379,7 +388,7 @@ class TestPermutationMatrix(unittest.TestCase):
 
 class TestMapFile(unittest.TestCase):
     def setUp(self) -> None:
-        self.test_fn = f"test-{secrets.token_urlsafe(3)}.map"
+        self.test_fn = TEST_DATA_DIR / f"test-{secrets.token_urlsafe(3)}.map"
 
     def tearDown(self) -> None:
         try:
@@ -726,6 +735,60 @@ class TestMapFile(unittest.TestCase):
             mapf.data = numpy.random.rand(12, 22, 17)
             self.assertEqual((2, 3, 1), mapf.orientation.to_integers())
             self.assertEqual((2.6, 1.5, 3.7), mapf.voxel_size)
+
+    def test_create_with_map_mode(self):
+        """"""
+        with mapfile.MapFile(
+                self.test_fn,
+                file_mode='w',
+                map_mode=0,
+                voxel_size=(8.7, 9.2, 1.2),
+                orientation=models.Orientation.from_integers((2, 3, 1))
+        ) as mapf:
+            mapf.data = numpy.random.randint(0, 1, size=(11, 9, 16))
+            self.assertEqual(0, mapf.mode)
+
+    def test_change_map_mode_int(self):
+        """"""
+        # int to int valid: 0, 1, 3, 6
+        # float to float valid: 2, 12
+        # complex to complex: 3, 4
+        # int to/from float invalid
+        with mapfile.MapFile(self.test_fn, 'w', map_mode=0) as mapf:
+            mapf.data = numpy.random.randint(0, 1, (5, 5, 5))
+            self.assertEqual(1, mapf.data.itemsize)
+            mapf.mode = 1
+            self.assertEqual(2, mapf.data.itemsize)
+            mapf.mode = 3
+            self.assertEqual(4, mapf.data.itemsize)
+            # change back
+            mapf.mode = 0
+            self.assertEqual(1, mapf.data.itemsize)
+            mapf.mode = 1
+            self.assertEqual(2, mapf.data.itemsize)
+
+        with self.assertRaises(UserWarning):
+            with mapfile.MapFile(self.test_fn, 'r+') as mapf2:
+                mapf.mode = 2
+                self.assertEqual(4, mapf.data.itemsize)
+
+        with self.assertRaises(UserWarning):
+            with mapfile.MapFile(self.test_fn, 'r+') as mapf2:
+                mapf.mode = 12
+                self.assertEqual(2, mapf.data.itemsize)
+
+    def test_change_map_mode_float(self):
+        """"""
+        with mapfile.MapFile(self.test_fn, 'w') as mapf:
+            mapf.data = numpy.random.rand(8, 8, 8)
+            self.assertEqual(4, mapf.data.itemsize)
+            mapf.mode = 12
+            self.assertEqual(2, mapf.data.itemsize)
+
+        with self.assertRaises(UserWarning):
+            with mapfile.MapFile(self.test_fn, 'r+') as mapf:
+                mapf.mode = 0
+                self.assertEqual(1, mapf.data.itemsize)
 
 
 class TestUtils(unittest.TestCase):

@@ -13,7 +13,7 @@ file = {
     )
 }
 orientation = {
-    'args': ['--orientation'],
+    'args': ['-O', '--orientation'],
     'kwargs': dict(
         default="XYZ",
         choices=list(map(lambda t: ''.join(t), itertools.permutations('XYZ', 3))),  # all 3-permutations
@@ -39,13 +39,16 @@ size = {
         help="specify the EMDB MAP size in the order columns, rows, sections [default: 10 10 10]"
     )
 }
-
+INT_MAP_MODES = [0, 1, 3]
+FLOAT_MAP_MODES = [2, 12]
+COMPLEX_MAP_MODES = [4]
+MAP_MODES = INT_MAP_MODES + FLOAT_MAP_MODES + COMPLEX_MAP_MODES
 map_mode = {
     'args': ['--map-mode'],
     'kwargs': dict(
         default=2,
         type=int,
-        choices=[0, 1, 2, 3, 4, 6, 12],
+        choices=MAP_MODES,
         help="the map mode sets the number of bytes per voxel [default: 2 (= 4 bytes per voxel)"
     )
 }
@@ -110,6 +113,28 @@ _add_arg(create_parser, voxel_sizes)
 _add_arg(create_parser, size)
 _add_arg(create_parser, file_mode, default='w')
 _add_arg(create_parser, map_mode)
+data_mutex_group = create_parser.add_mutually_exclusive_group(required=False)
+data_mutex_group.add_argument(
+    '--zeros', action='store_true', default=True, help="EMDB MAP with zeros"
+)
+data_mutex_group.add_argument(
+    '--ones', action='store_true', help="EMDB MAP with ones"
+)
+data_mutex_group.add_argument(
+    '--empty', action='store_true', help="EMDB MAP which is empty"
+)
+data_mutex_group.add_argument(
+    '--random-integers', action='store_true', help="EMDB MAP with integers"
+)
+data_mutex_group.add_argument(
+    '--random-floats', action='store_true', help="EMDB MAP with random floats"
+)
+create_parser.add_argument(
+    '--min', default=0, type=int, help="minimum integer [default: 0]"
+)
+create_parser.add_argument(
+    '--max', default=10, type=int, help="minimum integer [default: 10]"
+)
 
 
 def parse_args():

@@ -4,7 +4,7 @@ import math
 import struct
 
 import numpy
-
+from mapfile import cli
 _axes = {
     1: 'X',
     2: 'Y',
@@ -53,6 +53,16 @@ class Orientation:
             raise ValueError(f"invalid integers {integers}: only use a 3-tuple with values from {{1, 2, 3}}")
         c, r, s = integers
         return cls(cols=_axes[c], rows=_axes[r], sections=_axes[s])
+
+    @classmethod
+    def from_string(cls, orientation_string: str):
+        """"""
+        try:
+            set(orientation_string.upper()).intersection({'X', 'Y', 'Z'}) == {'X', 'Y', 'Z'} and len(orientation_string) == 3
+        except AssertionError:
+            raise ValueError(f"invalid orientation string {orientation_string}: only use a string with XYZ only")
+        c, r, s = tuple(orientation_string)
+        return cls(cols=c, rows=r, sections=s)
 
     def to_integers(self):
         return _raxes[self.cols], _raxes[self.rows], _raxes[self.sections]
@@ -211,7 +221,7 @@ class MapFileAttribute:
 
 class MapFile:
     __attrs__ = [
-        '_nc', '_nr', '_ns', '_mode', '_ncstart', '_nrstart', '_nsstart',
+        '_nc', '_nr', '_ns', '_ncstart', '_nrstart', '_nsstart',
         '_nx', '_ny', '_nz', '_x_length', '_y_length', '_z_length',
         '_alpha', '_beta', '_gamma', '_mapc', '_mapr', '_maps',
         '_amin', '_amax', '_amean', '_ispg', '_nsymbt', '_lskflg',
@@ -225,7 +235,7 @@ class MapFile:
     nc = MapFileAttribute('_nc')
     nr = MapFileAttribute('_nr')
     ns = MapFileAttribute('_ns')
-    mode = MapFileAttribute('_mode', 2)
+    # mode = MapFileAttribute('_mode', 2)
     ncstart = MapFileAttribute('_ncstart', 0)
     nrstart = MapFileAttribute('_nrstart', 0)
     nsstart = MapFileAttribute('_nsstart', 0)
@@ -278,7 +288,7 @@ class MapFile:
     def voxel_size(self, vox_size):
         if isinstance(vox_size, (int, float,)):
             x_size, y_size, z_size = (vox_size,) * 3
-        elif isinstance(vox_size, tuple):
+        elif isinstance(vox_size, (tuple, list, set)):
             try:
                 assert len(vox_size) == 3
             except AssertionError:
@@ -293,21 +303,28 @@ class MapFile:
         self._voxel_size = x_size, y_size, z_size
         self._prepare()
 
-    def __init__(self, name, file_mode='r', orientation=Orientation(cols='X', rows='Y', sections='Z'), voxel_size=(1.0, 1.0, 1.0)):
+    def __init__(self, name, file_mode='r', orientation=Orientation(cols='X', rows='Y', sections='Z'),
+                 voxel_size=(1.0, 1.0, 1.0), map_mode=2):
         """"""
         # todo: validate file modes in ['r', 'r+' and 'w']
         self.name = name
         self.file_mode = file_mode
         self._data = None
         self._orientation = orientation
-        self._voxel_size = tuple(numpy.array(voxel_size) @ PermutationMatrix.from_orientations((1, 2, 3),
-                                                                                         orientation.to_integers()).tolist())
+        self._voxel_size = tuple(
+            numpy.array(voxel_size) @ PermutationMatrix.from_orientations(
+                (1, 2, 3), # always start from the default
+                orientation.to_integers()
+            ).tolist()
+        )
         self.handle = None
         # create attributes
         for attr in self.__attrs__:
             if hasattr(self, attr):
                 continue
             setattr(self, attr, None)
+        # reset the map mode
+        self._mode = map_mode
 
     def __enter__(self):
         self.handle = open(self.name, f'{self.file_mode}b')
@@ -390,7 +407,6 @@ class MapFile:
             raise UserWarning("no data to write; set MapFile.data attribute to a numpy 3D array")
         # some attributes have default values and are excluded
         self._ns, self._nr, self._nc = self._data.shape
-        self._mode = self._dtype_to_mode()
         self._ncstart, self._nrstart, self._nsstart = 0, 0, 0
         self._nz, self._ny, self._nx = self._data.shape
         self._z_length, self._y_length, self._x_length = numpy.multiply(self._data.shape,
@@ -398,6 +414,9 @@ class MapFile:
         self._mapc, self._mapr, self._maps = self.orientation.to_integers()
         self._amin, self._amax, self._amean = self._data.min(), self._data.max(), self._data.mean()
         self._rms = math.sqrt(numpy.mean(numpy.square(self._data)))
+        # change dtype if necessary
+        dtype = self._mode_to_dtype()
+        self._data = self._data.astype(dtype)
 
     def _dtype_to_mode(self):
         """"""
@@ -472,6 +491,23 @@ class MapFile:
             # byteorder
             self._data = numpy.frombuffer(self.handle.read(), dtype=dtype).reshape(self.ns, self.nr, self.nc)
         return self._data
+
+    @property
+    def mode(self):
+        return self._mode
+
+    @mode.setter
+    def mode(self, value):
+        try:
+            assert value in cli.MAP_MODES
+        except AssertionError:
+            raise ValueError(f"invalid mode={value}; should be one of {', '.join(cli.MAP_MODES)}")
+        if self._mode in cli.INT_MAP_MODES and value in cli.FLOAT_MAP_MODES:
+            raise UserWarning(f"potential increase in file size by converting from int to float voxels")
+        elif self._mode in cli.FLOAT_MAP_MODES and value in cli.INT_MAP_MODES:
+            raise UserWarning(f"truncating data by converting from float to int voxels")
+        self._mode = value
+        self._prepare()
 
     @property
     def data(self):

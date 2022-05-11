@@ -5,17 +5,20 @@ from mapfile import models
 
 def view(args):
     """"""
-    with models.MapFile(args.file, colour=args.colour) as mapf:
+    with models.MapFile(args.file, colour=True) as mapf:
         print(mapf)
     return os.EX_OK
 
 
 def edit(args):
     """"""
-    with models.MapFile(args.file, args.file_mode) as mapf:
-        mapf.orientation = models.Orientation.from_string(args.orientation)
-        mapf.voxel_size = args.voxel_sizes
-        mapf.mode = args.map_mode
+    with models.MapFile(args.file, args.file_mode, start=args.start) as mapf:
+        if args.orientation is not None:
+            mapf.orientation = models.Orientation.from_string(args.orientation)
+        if args.voxel_sizes is not None:
+            mapf.voxel_size = args.voxel_sizes
+        if args.map_mode is not None:
+            mapf.mode = args.map_mode
         print(mapf)
     return os.EX_OK
 

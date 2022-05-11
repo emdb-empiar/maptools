@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 import struct
 import unicodedata
+import warnings
 
 import numpy
 from styled import Styled
@@ -226,13 +227,12 @@ class MapFileAttribute:
 
 class MapFile:
     __attrs__ = [
-        '_nc', '_nr', '_ns', '_ncstart', '_nrstart', '_nsstart',
+        '_nc', '_nr', '_ns',
         '_nx', '_ny', '_nz', '_x_length', '_y_length', '_z_length',
         '_alpha', '_beta', '_gamma', '_mapc', '_mapr', '_maps',
         '_amin', '_amax', '_amean', '_ispg', '_nsymbt', '_lskflg',
         '_s11', '_s12', '_s13', '_s21', '_s22', '_s23', '_s31', '_s32', '_s33',
         '_t1', '_t2', '_t3', '_extra', '_map', '_machst', '_rms', '_nlabl',
-        # '_orientation',
         # '_label_0', '_label_1', '_label_2', '_label_3', '_label_4', '_label_5', '_label_6', '_label_7', '_label_8',
         # '_label_9',
     ]
@@ -240,10 +240,6 @@ class MapFile:
     nc = MapFileAttribute('_nc')
     nr = MapFileAttribute('_nr')
     ns = MapFileAttribute('_ns')
-    # mode = MapFileAttribute('_mode', 2)
-    ncstart = MapFileAttribute('_ncstart', 0)
-    nrstart = MapFileAttribute('_nrstart', 0)
-    nsstart = MapFileAttribute('_nsstart', 0)
     nx = MapFileAttribute('_nx')
     ny = MapFileAttribute('_ny')
     nz = MapFileAttribute('_nz')
@@ -285,19 +281,20 @@ class MapFile:
     sections = MapFileAttribute('_ns')
 
     def __init__(self, name, file_mode='r', orientation=Orientation(cols='X', rows='Y', sections='Z'),
-                 voxel_size=(1.0, 1.0, 1.0), map_mode=2, colour=True):
+                 voxel_size=(1.0, 1.0, 1.0), map_mode=2, start=(0, 0, 0), colour=True):
         """"""
         # todo: validate file modes in ['r', 'r+' and 'w']
         self.name = name
         self.file_mode = file_mode
         self._data = None
         self._orientation = orientation
-        self._voxel_size = tuple(
-            numpy.array(voxel_size) @ PermutationMatrix.from_orientations(
-                (1, 2, 3),  # always start from the default
-                orientation.to_integers()
-            ).tolist()
-        )
+        if file_mode == 'w':
+            self._voxel_size = tuple(
+                numpy.array(voxel_size) @ PermutationMatrix.from_orientations(
+                    (1, 2, 3),  # always start from the default
+                    orientation.to_integers()
+                ).tolist()
+            )
         self.handle = None
         # create attributes
         for attr in self.__attrs__:
@@ -306,19 +303,21 @@ class MapFile:
             setattr(self, attr, None)
         # reset the map mode
         self._mode = map_mode
+        # start
+        self._start = start
         # colour
         self.colour = colour
 
     def __enter__(self):
         self.handle = open(self.name, f'{self.file_mode}b')
-        if self.file_mode in ['r', 'r+']:
+        if self.file_mode in ['r', 'r+']: # since we are reading we defer to what is present
             # source: ftp://ftp.ebi.ac.uk/pub/databases/emdb/doc/Map-format/current/EMDB_map_format.pdf
             # number of columns (fastest changing), rows, sections (slowest changing)
             self._nc, self._nr, self._ns = struct.unpack('<iii', self.handle.read(12))
             # voxel datatype
             self._mode = struct.unpack('<I', self.handle.read(4))[0]
             # position of first column, first row, and first section (voxel grid units)
-            self._ncstart, self._nrstart, self._nsstart = struct.unpack('<iii', self.handle.read(12))
+            self._start = struct.unpack('<iii', self.handle.read(12))
             # intervals per unit cell repeat along X,Y Z
             self._nx, self._ny, self._nz = struct.unpack('<iii', self.handle.read(12))
             # Unit Cell repeats along X, Y, Z In Ångstroms
@@ -365,7 +364,13 @@ class MapFile:
             # read the data
             dtype = self._mode_to_dtype()
             # byteorder
+            # fixme: bug when changing mode
             self._data = numpy.frombuffer(self.handle.read(), dtype=dtype).reshape(self.ns, self.nr, self.nc)
+            # voxel size
+            self._voxel_size = tuple(numpy.divide(
+                numpy.array([self._x_length, self._y_length, self._z_length]),
+                numpy.array([self._nc, self._nr, self._ns]),
+            ).tolist())
 
         return self
 
@@ -401,10 +406,32 @@ class MapFile:
         except AssertionError:
             raise ValueError(f"invalid mode={value}; should be one of {', '.join(cli.MAP_MODES)}")
         if self._mode in cli.INT_MAP_MODES and value in cli.FLOAT_MAP_MODES:
-            raise UserWarning(f"potential increase in file size by converting from int to float voxels")
+            warnings.warn(f"potential increase in file size by converting from int to float voxels", UserWarning)
         elif self._mode in cli.FLOAT_MAP_MODES and value in cli.INT_MAP_MODES:
-            raise UserWarning(f"truncating data by converting from float to int voxels")
+            warnings.warn(f"truncating data by converting from float to int voxels", UserWarning)
         self._mode = value
+        self._prepare()
+
+    @property
+    def start(self):
+        return self._start
+
+    @start.setter
+    def start(self, value):
+        """"""
+        # tuple, list, set
+        try:
+            assert len(value) == 3
+        except AssertionError:
+            raise ValueError(f"must have only 3 values: {value}")
+        if isinstance(value, (tuple, list, set)):
+            _value = value
+        # array
+        elif isinstance(value, numpy.ndarray):
+            _value = value.asdtype(int)
+        else:
+            raise TypeError(f"value must be a tuple, list, set or numpy array")
+        self._start = _value
         self._prepare()
 
     @property
@@ -472,6 +499,8 @@ class MapFile:
         self._orientation = orientation
         # also permute the voxel sizes
         self.voxel_size = self.voxel_size @ permutation_matrix
+        # also permute the start fields
+
         # recalculate parameters
         self._prepare()
 
@@ -482,16 +511,15 @@ class MapFile:
             raise UserWarning("no data to write; set MapFile.data attribute to a numpy 3D array")
         # some attributes have default values and are excluded
         self._ns, self._nr, self._nc = self._data.shape
-        self._ncstart, self._nrstart, self._nsstart = 0, 0, 0
         self._nz, self._ny, self._nx = self._data.shape
         self._z_length, self._y_length, self._x_length = numpy.multiply(self._data.shape,
                                                                         numpy.array(self._voxel_size)[::-1])
         self._mapc, self._mapr, self._maps = self.orientation.to_integers()
-        self._amin, self._amax, self._amean = self._data.min(), self._data.max(), self._data.mean()
         self._rms = math.sqrt(numpy.mean(numpy.square(self._data)))
         # change dtype if necessary
         dtype = self._mode_to_dtype()
         self._data = self._data.astype(dtype)
+        self._amin, self._amax, self._amean = self._data.min(), self._data.max(), self._data.mean()
 
     def _dtype_to_mode(self):
         """"""
@@ -535,7 +563,7 @@ class MapFile:
     def _write_header(self):
         self.handle.write(struct.pack('<iii', self.nc, self.nr, self.ns))
         self.handle.write(struct.pack('<I', self.mode))
-        self.handle.write(struct.pack('<iii', self.ncstart, self.nrstart, self.nsstart))
+        self.handle.write(struct.pack('<iii', *self.start))
         self.handle.write(struct.pack('<iii', self.nx, self.ny, self.nz))
         self.handle.write(struct.pack('<fff', self.x_length, self.y_length, self.z_length))
         self.handle.write(struct.pack('<fff', self.alpha, self.beta, self.gamma))
@@ -564,17 +592,18 @@ class MapFile:
         alpha = unicodedata.lookup('GREEK SMALL LETTER ALPHA')
         beta = unicodedata.lookup('GREEK SMALL LETTER BETA')
         gamma = unicodedata.lookup('GREEK SMALL LETTER GAMMA')
+        prec_tuple = lambda t: f"({t[0]:6f}, {t[1]:6f}, {t[2]:6f})"
         if self.colour:
             bold_yellow = lambda t: Styled(f"[[ '{t:<40}'|bold:fg-white:no-end ]]")
             bold_green = lambda t: Styled(f"[[ '{t:<40}'|bold:fg-green:no-end ]]")
             string = f"""\
                 \r{bold_yellow('Cols, rows, sections:')}{self.nc, self.nr, self.ns}
                 \r{bold_green('Mode:')}{self.mode} ({self._mode_to_dtype()})
-                \r{bold_yellow('Start col, row, sections:')}({self.ncstart}, {self.nrstart}, {self.nsstart})
+                \r{bold_yellow('Start col, row, sections:')}{self.start}
                 \r{bold_green('X, Y, Z:')}({self.nx}, {self.ny}, {self.nz})
-                \r{bold_yellow('Voxel size:')}({self.voxel_size})
-                \r{bold_green('Lengths X, Y, Z (Ångstrom):')}{self.x_length}, {self.y_length}, {self.z_length}
-                \r{bold_yellow(f'{alpha}, {beta}, {gamma}:')}'{self.alpha}, {self.beta}, {self.gamma}
+                \r{bold_yellow('Voxel size:')}{prec_tuple(self.voxel_size)}
+                \r{bold_green('Lengths X, Y, Z (Ångstrom):')}{self.x_length:6f}, {self.y_length:6f}, {self.z_length:6f}
+                \r{bold_yellow(f'{alpha}, {beta}, {gamma}:')}{self.alpha}, {self.beta}, {self.gamma}
                 \r{bold_green('Map cols, rows, sections:')}{self.mapc}, {self.mapr}, {self.maps}
                 \r{bold_yellow('Density min, max, mean:')}{self.amin:6f}, {self.amax:6f}, {self.amean:6f}
                 \r{bold_green('Space group:')}{self.ispg}
@@ -588,18 +617,18 @@ class MapFile:
                 \r{bold_green('Map:')}{self.map}
                 \r{bold_yellow('Mach-stamp:')}{self.machst}
                 \r{bold_green('RMS:')}{self.rms}
-                \r{bold_yellow('Number of labels:')}{self.nlabl}"""
+                \r{bold_yellow('Number of labels:')}{self.nlabl}\n"""
             string += str(Styled("[[ ''|yes-end ]]"))
         else:
             plain = lambda t: f"{t:<40}"
             string = f"""\
                 \r{plain('Cols, rows, sections:')}{self.nc, self.nr, self.ns}
                 \r{plain('Mode:')}{self.mode} ({self._mode_to_dtype()})
-                \r{plain('Start col, row, sections:')}({self.ncstart}, {self.nrstart}, {self.nsstart})
+                \r{plain('Start col, row, sections:')}{self.start}
                 \r{plain('X, Y, Z:')}({self.nx}, {self.ny}, {self.nz})
-                \r{plain('Voxel size:')}({self.voxel_size})
-                \r{plain('Lengths X, Y, Z (Ångstrom):')}{self.x_length}, {self.y_length}, {self.z_length}
-                \r{plain(f'{alpha}, {beta}, {gamma}:')}'{self.alpha}, {self.beta}, {self.gamma}
+                \r{plain('Voxel size:')}{prec_tuple(self.voxel_size)}
+                \r{plain('Lengths X, Y, Z (Ångstrom):')}{self.x_length:6f}, {self.y_length:6f}, {self.z_length:6f}
+                \r{plain(f'{alpha}, {beta}, {gamma}:')}{self.alpha}, {self.beta}, {self.gamma}
                 \r{plain('Map cols, rows, sections:')}{self.mapc}, {self.mapr}, {self.maps}
                 \r{plain('Density min, max, mean:')}{self.amin:6f}, {self.amax:6f}, {self.amean:6f}
                 \r{plain('Space group:')}{self.ispg}

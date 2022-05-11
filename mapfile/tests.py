@@ -4,6 +4,7 @@ import random
 import secrets
 import sys
 import unittest
+import warnings
 
 import numpy
 
@@ -42,7 +43,6 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(0, args.min)
         self.assertEqual(10, args.max)
         self.assertTrue(args.zeros)
-
 
 
 class TestManagers(unittest.TestCase):
@@ -405,9 +405,7 @@ class TestMapFile(unittest.TestCase):
                 self.assertIsNone(mapf.nr)
                 self.assertIsNone(mapf.ns)
                 self.assertEqual(2, mapf.mode)
-                self.assertEqual(0, mapf.ncstart)
-                self.assertEqual(0, mapf.nrstart)
-                self.assertEqual(0, mapf.nsstart)
+                self.assertEqual((0, 0, 0), mapf.start)
                 self.assertIsNone(mapf.nx)
                 self.assertIsNone(mapf.ny)
                 self.assertIsNone(mapf.nz)
@@ -454,9 +452,7 @@ class TestMapFile(unittest.TestCase):
             self.assertEqual(20, mapf.nr)
             self.assertEqual(10, mapf.ns)
             self.assertEqual(2, mapf.mode)
-            self.assertEqual(0, mapf.ncstart)
-            self.assertEqual(0, mapf.nrstart)
-            self.assertEqual(0, mapf.nsstart)
+            self.assertEqual((0, 0, 0), mapf.start)
             self.assertEqual(30, mapf.nx)
             self.assertEqual(20, mapf.ny)
             self.assertEqual(10, mapf.nz)
@@ -501,9 +497,7 @@ class TestMapFile(unittest.TestCase):
             self.assertEqual(20, mapf2.nr)
             self.assertEqual(10, mapf2.ns)
             self.assertEqual(2, mapf2.mode)
-            self.assertEqual(0, mapf2.ncstart)
-            self.assertEqual(0, mapf2.nrstart)
-            self.assertEqual(0, mapf2.nsstart)
+            self.assertEqual((0, 0, 0), mapf2.start)
             self.assertEqual(30, mapf2.nx)
             self.assertEqual(20, mapf2.ny)
             self.assertEqual(10, mapf2.nz)
@@ -589,9 +583,7 @@ class TestMapFile(unittest.TestCase):
             self.assertEqual(10, mapf2.nr)
             self.assertEqual(20, mapf2.ns)
             self.assertEqual(2, mapf2.mode)
-            self.assertEqual(0, mapf2.ncstart)
-            self.assertEqual(0, mapf2.nrstart)
-            self.assertEqual(0, mapf2.nsstart)
+            self.assertEqual((0, 0, 0), mapf2.start)
             self.assertEqual(30, mapf2.nx)
             self.assertEqual(10, mapf2.ny)
             self.assertEqual(20, mapf2.nz)
@@ -639,9 +631,7 @@ class TestMapFile(unittest.TestCase):
             self.assertEqual(20, mapf.nr)
             self.assertEqual(10, mapf.ns)
             self.assertEqual(2, mapf.mode)
-            self.assertEqual(0, mapf.ncstart)
-            self.assertEqual(0, mapf.nrstart)
-            self.assertEqual(0, mapf.nsstart)
+            self.assertEqual((0, 0, 0), mapf.start)
             self.assertEqual(30, mapf.nx)
             self.assertEqual(20, mapf.ny)
             self.assertEqual(10, mapf.nz)
@@ -718,6 +708,13 @@ class TestMapFile(unittest.TestCase):
             self.assertAlmostEqual(27.9, mapf.x_length)
             self.assertEqual(9.6, mapf.y_length)
             self.assertAlmostEqual(8.5, mapf.z_length)
+            voxel_size_orig = mapf.voxel_size
+
+        # read
+        with mapfile.MapFile(self.test_fn, 'r+') as mapf2:
+            self.assertAlmostEqual(voxel_size_orig[0], mapf2.voxel_size[0], places=6)
+            self.assertAlmostEqual(voxel_size_orig[1], mapf2.voxel_size[1], places=6)
+            self.assertAlmostEqual(voxel_size_orig[2], mapf2.voxel_size[2], places=6)
 
     def test_create_anisotropic_voxels(self):
         # create with anisotropic voxel sizes
@@ -767,15 +764,15 @@ class TestMapFile(unittest.TestCase):
             mapf.mode = 1
             self.assertEqual(2, mapf.data.itemsize)
 
-        with self.assertRaises(UserWarning):
+        with self.assertWarns(UserWarning):
             with mapfile.MapFile(self.test_fn, 'r+') as mapf2:
-                mapf.mode = 2
-                self.assertEqual(4, mapf.data.itemsize)
+                mapf2.mode = 2
+                self.assertEqual(4, mapf2.data.itemsize)
 
-        with self.assertRaises(UserWarning):
-            with mapfile.MapFile(self.test_fn, 'r+') as mapf2:
-                mapf.mode = 12
-                self.assertEqual(2, mapf.data.itemsize)
+        with self.assertWarns(UserWarning):
+            with mapfile.MapFile(self.test_fn, 'r+') as mapf3:
+                mapf3.mode = 1
+                self.assertEqual(2, mapf3.data.itemsize)
 
     def test_change_map_mode_float(self):
         """"""
@@ -789,6 +786,20 @@ class TestMapFile(unittest.TestCase):
             with mapfile.MapFile(self.test_fn, 'r+') as mapf:
                 mapf.mode = 0
                 self.assertEqual(1, mapf.data.itemsize)
+
+    def test_start(self):
+        """"""
+        with mapfile.MapFile(self.test_fn, 'w', start=(3, 9, -11)) as mapf:
+            mapf.data = numpy.random.rand(3, 5, 2)
+            print(mapf)
+            self.assertEqual((3, 9, -11), mapf.start)
+            # change start
+            mapf.start = (58, 3, 4)
+            print(mapf)
+            self.assertEqual((58, 3, 4), mapf.start)
+        # read
+        with mapfile.MapFile(self.test_fn) as mapf2:
+            self.assertEqual((58, 3, 4), mapf2.start)
 
 
 class TestUtils(unittest.TestCase):

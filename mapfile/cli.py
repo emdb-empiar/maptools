@@ -15,7 +15,6 @@ file = {
 orientation = {
     'args': ['-O', '--orientation'],
     'kwargs': dict(
-        default="XYZ",
         choices=list(map(lambda t: ''.join(t), itertools.permutations('XYZ', 3))),  # all 3-permutations
         help="change the space orientation [default: XYZ]"
     )
@@ -23,7 +22,6 @@ orientation = {
 voxel_sizes = {
     'args': ['--voxel-sizes'],
     'kwargs': dict(
-        default=[1.0, 1.0, 1.0],
         nargs=3,
         type=float,
         help="specify the voxel sizes in the order X, Y, Z [default: 1.0 1.0 1.0]"
@@ -39,14 +37,13 @@ size = {
         help="specify the EMDB MAP size in the order columns, rows, sections [default: 10 10 10]"
     )
 }
-INT_MAP_MODES = [0, 1, 3]
+INT_MAP_MODES = [0, 1, 3, 6]
 FLOAT_MAP_MODES = [2, 12]
 COMPLEX_MAP_MODES = [4]
 MAP_MODES = INT_MAP_MODES + FLOAT_MAP_MODES + COMPLEX_MAP_MODES
 map_mode = {
     'args': ['--map-mode'],
     'kwargs': dict(
-        default=2,
         type=int,
         choices=MAP_MODES,
         help="the map mode sets the number of bytes per voxel [default: 2 (= 4 bytes per voxel)"
@@ -59,6 +56,16 @@ file_mode = {
         default='r',
         choices=['r', 'r+', 'w'],
         help="file access mode with which to open the specified file [default: 'r']"
+    )
+}
+
+start = {
+    'args': ['--start'],
+    'kwargs': dict(
+        default=[0, 0, 0],
+        nargs=3,
+        type=int,
+        help="position of first column, first row and first section (voxel grid units) [default: 0 0 0]"
     )
 }
 
@@ -101,6 +108,7 @@ _add_arg(edit_parser, orientation)
 _add_arg(edit_parser, voxel_sizes)
 _add_arg(edit_parser, file_mode, default='r+')
 _add_arg(edit_parser, map_mode)
+_add_arg(edit_parser, start)
 
 # create
 create_parser = subparsers.add_parser(
@@ -137,6 +145,7 @@ create_parser.add_argument(
 create_parser.add_argument(
     '--max', default=10, type=int, help="minimum integer [default: 10]"
 )
+_add_arg(create_parser, start)
 
 
 def parse_args():

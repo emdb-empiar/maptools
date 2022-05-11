@@ -69,6 +69,13 @@ start = {
     )
 }
 
+outfile = {
+    'args': ['-o', '--outfile'],
+    'kwargs': dict(
+        help="output file name"
+    )
+}
+
 parser = argparse.ArgumentParser(prog="map", description="Utilities to work with EMDB MAP files")
 
 

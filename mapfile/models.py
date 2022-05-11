@@ -363,6 +363,8 @@ class MapFile:
 
             # read the data
             dtype = self._mode_to_dtype()
+            print(Styled(f"[[ '[info] current mode: {self._mode}'|fg-yellow ]]"))
+            print(Styled(f"[[ '[info] reading data to type={dtype}...'|fg-yellow ]]"))
             # byteorder
             # fixme: bug when changing mode
             self._data = numpy.frombuffer(self.handle.read(), dtype=dtype).reshape(self.ns, self.nr, self.nc)
@@ -541,7 +543,7 @@ class MapFile:
 
     def _mode_to_dtype(self):
         """"""
-        dtype = numpy.float32  # default
+        # dtype = numpy.float32  # default
         if self.mode == 0:
             dtype = numpy.int8
         elif self.mode == 1:
@@ -610,7 +612,7 @@ class MapFile:
                 \r{bold_yellow('Bytes in symmetry table:')}{self.nsymbt}
                 \r{bold_green('Skew matrix flag:')}{self.lskflg}
                 \r{bold_yellow('Skew matrix:')}{self.s11} {self.s12} {self.s13}
-                \r{bold_green('')}{self.s21} {self.s22} {self.s23}
+                \r{bold_yellow('')}{self.s21} {self.s22} {self.s23}
                 \r{bold_yellow('')}{self.s31} {self.s32} {self.s33}
                 \r{bold_green('Skew translation:')}({self.t1}, {self.t2}, {self.t3})
                 \r{bold_yellow('Extra:')}{self.extra}

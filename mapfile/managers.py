@@ -12,6 +12,21 @@ def view(args):
 
 def edit(args):
     """"""
+    # todo: handle output file
+    """
+    if args.output is not None:
+        with models.MapFile(args.output, 'w') as mapout:
+            with models.MapFile(args.file) as mapin:
+                mapout.data = mapin.data
+    else:
+        with models.MapFile(args.file, file_mode=args.file_mode) as mapf:
+            if args.orientation is not None:
+                mapf.orientation = models.Orientation.from_string(args.orientation)
+            if args.voxel_sizes is not None:
+                mapf.voxel_size = args.voxel_sizes
+            if args.map_mode is not None:
+                mapf.mode = args.map_mode
+    """
     with models.MapFile(args.file, args.file_mode, start=args.start) as mapf:
         if args.orientation is not None:
             mapf.orientation = models.Orientation.from_string(args.orientation)

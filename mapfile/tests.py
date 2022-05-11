@@ -714,8 +714,7 @@ class TestMapFile(unittest.TestCase):
         # create with anisotropic voxel sizes
         with mapfile.MapFile(self.test_fn, 'w', voxel_size=(3.7, 2.6, 1.5)) as mapf:
             mapf.data = numpy.random.rand(12, 22, 17)
-            print(mapf)
-            self.assertTrue(False)
+            self.assertEqual((3.7, 2.6, 1.5), mapf.voxel_size)
 
     def test_create_with_nonstardard_and_anisotropic(self):
         """"""
@@ -725,8 +724,8 @@ class TestMapFile(unittest.TestCase):
                 voxel_size=(3.7, 2.6, 1.5)
         ) as mapf:
             mapf.data = numpy.random.rand(12, 22, 17)
-            print(mapf)
-            self.assertTrue(False)
+            self.assertEqual((2, 3, 1), mapf.orientation.to_integers())
+            self.assertEqual((2.6, 1.5, 3.7), mapf.voxel_size)
 
 
 class TestUtils(unittest.TestCase):

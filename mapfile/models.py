@@ -300,7 +300,8 @@ class MapFile:
         self.file_mode = file_mode
         self._data = None
         self._orientation = orientation
-        self._voxel_size = voxel_size
+        self._voxel_size = tuple(numpy.array(voxel_size) @ PermutationMatrix.from_orientations((1, 2, 3),
+                                                                                         orientation.to_integers()).tolist())
         self.handle = None
         # create attributes
         for attr in self.__attrs__:
@@ -392,7 +393,8 @@ class MapFile:
         self._mode = self._dtype_to_mode()
         self._ncstart, self._nrstart, self._nsstart = 0, 0, 0
         self._nz, self._ny, self._nx = self._data.shape
-        self._z_length, self._y_length, self._x_length = numpy.multiply(self._data.shape, numpy.array(self._voxel_size)[::-1])
+        self._z_length, self._y_length, self._x_length = numpy.multiply(self._data.shape,
+                                                                        numpy.array(self._voxel_size)[::-1])
         self._mapc, self._mapr, self._maps = self.orientation.to_integers()
         self._amin, self._amax, self._amean = self._data.min(), self._data.max(), self._data.mean()
         self._rms = math.sqrt(numpy.mean(numpy.square(self._data)))

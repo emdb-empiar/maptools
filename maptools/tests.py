@@ -8,8 +8,8 @@ import warnings
 
 import numpy
 
-import mapfile
-from mapfile import models, cli, managers, utils
+import maptools
+from maptools import models, cli, managers, utils
 
 BASE_DIR = pathlib.Path(__file__).parent.parent
 TEST_DATA_DIR = BASE_DIR / 'test_data'
@@ -26,20 +26,20 @@ class TestCLI(unittest.TestCase):
         args = cli.cli(f"map edit file.map")
         self.assertEqual('edit', args.command)
         self.assertEqual('file.map', args.file)
-        self.assertEqual('XYZ', args.orientation)
-        self.assertEqual([1.0, 1.0, 1.0], args.voxel_sizes)
+        self.assertIsNone(args.orientation)
+        self.assertIsNone(args.voxel_sizes)
         self.assertEqual('r+', args.file_mode)
-        self.assertEqual(2, args.map_mode)
+        self.assertIsNone(args.map_mode)
 
     def test_create(self):
         args = cli.cli(f"map create file.map")
         self.assertEqual('create', args.command)
         self.assertEqual('file.map', args.file)
-        self.assertEqual('XYZ', args.orientation)
-        self.assertEqual([1.0, 1.0, 1.0], args.voxel_sizes)
+        self.assertIsNone(args.orientation)
+        self.assertIsNone(args.voxel_sizes)
         self.assertEqual([10, 10, 10], args.size)
         self.assertEqual('w', args.file_mode)
-        self.assertEqual(2, args.map_mode)
+        self.assertIsNone(args.map_mode)
         self.assertEqual(0, args.min)
         self.assertEqual(10, args.max)
         self.assertTrue(args.zeros)
@@ -692,7 +692,7 @@ class TestMapFile(unittest.TestCase):
         # we start off with a standard orientation but anisotropic
         # then we change to nonstandard
         # examine the voxel size
-        with mapfile.MapFile(self.test_fn, file_mode='w') as mapf:
+        with models.MapFile(self.test_fn, file_mode='w') as mapf:
             mapf.data = numpy.random.rand(3, 4, 5)
             # x=1.7, y=2.4, z=9.3
             # X=8.5, Y=9.6, Z=27.9
@@ -711,20 +711,20 @@ class TestMapFile(unittest.TestCase):
             voxel_size_orig = mapf.voxel_size
 
         # read
-        with mapfile.MapFile(self.test_fn, 'r+') as mapf2:
+        with models.MapFile(self.test_fn, 'r+') as mapf2:
             self.assertAlmostEqual(voxel_size_orig[0], mapf2.voxel_size[0], places=6)
             self.assertAlmostEqual(voxel_size_orig[1], mapf2.voxel_size[1], places=6)
             self.assertAlmostEqual(voxel_size_orig[2], mapf2.voxel_size[2], places=6)
 
     def test_create_anisotropic_voxels(self):
         # create with anisotropic voxel sizes
-        with mapfile.MapFile(self.test_fn, 'w', voxel_size=(3.7, 2.6, 1.5)) as mapf:
+        with models.MapFile(self.test_fn, 'w', voxel_size=(3.7, 2.6, 1.5)) as mapf:
             mapf.data = numpy.random.rand(12, 22, 17)
             self.assertEqual((3.7, 2.6, 1.5), mapf.voxel_size)
 
     def test_create_with_nonstardard_and_anisotropic(self):
         """"""
-        with mapfile.MapFile(
+        with models.MapFile(
                 self.test_fn, 'w',
                 orientation=models.Orientation(cols='Y', rows='Z', sections='X'),
                 voxel_size=(3.7, 2.6, 1.5)
@@ -735,7 +735,7 @@ class TestMapFile(unittest.TestCase):
 
     def test_create_with_map_mode(self):
         """"""
-        with mapfile.MapFile(
+        with models.MapFile(
                 self.test_fn,
                 file_mode='w',
                 map_mode=0,
@@ -751,7 +751,7 @@ class TestMapFile(unittest.TestCase):
         # float to float valid: 2, 12
         # complex to complex: 3, 4
         # int to/from float invalid
-        with mapfile.MapFile(self.test_fn, 'w', map_mode=0) as mapf:
+        with models.MapFile(self.test_fn, 'w', map_mode=0) as mapf:
             mapf.data = numpy.random.randint(0, 1, (5, 5, 5))
             self.assertEqual(1, mapf.data.itemsize)
             mapf.mode = 1
@@ -765,31 +765,31 @@ class TestMapFile(unittest.TestCase):
             self.assertEqual(2, mapf.data.itemsize)
 
         with self.assertWarns(UserWarning):
-            with mapfile.MapFile(self.test_fn, 'r+') as mapf2:
+            with models.MapFile(self.test_fn, 'r+') as mapf2:
                 mapf2.mode = 2
                 self.assertEqual(4, mapf2.data.itemsize)
 
         with self.assertWarns(UserWarning):
-            with mapfile.MapFile(self.test_fn, 'r+') as mapf3:
+            with models.MapFile(self.test_fn, 'r+') as mapf3:
                 mapf3.mode = 1
                 self.assertEqual(2, mapf3.data.itemsize)
 
     def test_change_map_mode_float(self):
         """"""
-        with mapfile.MapFile(self.test_fn, 'w') as mapf:
+        with models.MapFile(self.test_fn, 'w') as mapf:
             mapf.data = numpy.random.rand(8, 8, 8)
             self.assertEqual(4, mapf.data.itemsize)
             mapf.mode = 12
             self.assertEqual(2, mapf.data.itemsize)
 
-        with self.assertRaises(UserWarning):
-            with mapfile.MapFile(self.test_fn, 'r+') as mapf:
-                mapf.mode = 0
-                self.assertEqual(1, mapf.data.itemsize)
+        with self.assertWarns(UserWarning):
+            with models.MapFile(self.test_fn, 'r+') as mapf2:
+                mapf2.mode = 0
+                self.assertEqual(1, mapf2.data.itemsize)
 
     def test_start(self):
         """"""
-        with mapfile.MapFile(self.test_fn, 'w', start=(3, 9, -11)) as mapf:
+        with models.MapFile(self.test_fn, 'w', start=(3, 9, -11)) as mapf:
             mapf.data = numpy.random.rand(3, 5, 2)
             print(mapf)
             self.assertEqual((3, 9, -11), mapf.start)
@@ -798,7 +798,7 @@ class TestMapFile(unittest.TestCase):
             print(mapf)
             self.assertEqual((58, 3, 4), mapf.start)
         # read
-        with mapfile.MapFile(self.test_fn) as mapf2:
+        with models.MapFile(self.test_fn) as mapf2:
             self.assertEqual((58, 3, 4), mapf2.start)
 
 

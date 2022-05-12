@@ -1,6 +1,6 @@
 import os
 import numpy
-from mapfile import models
+from maptools import models
 
 
 def view(args):

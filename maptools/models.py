@@ -8,7 +8,7 @@ import warnings
 import numpy
 from styled import Styled
 
-from mapfile import cli
+from maptools import cli
 
 _axes = {
     1: 'X',

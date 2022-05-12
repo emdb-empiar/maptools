@@ -1,6 +1,6 @@
 import numpy
 
-from mapfile.models import Orientation, _axes, _raxes
+from maptools.models import Orientation, _axes, _raxes
 
 
 def get_vol(cols, rows, sects, dtype=numpy.uint8):

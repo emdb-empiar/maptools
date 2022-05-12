@@ -1,4 +1,4 @@
-from mapfile.models import MapFile
+from maptools.models import MapFile
 
 __all__ = [MapFile]
 

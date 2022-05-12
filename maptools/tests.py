@@ -54,6 +54,7 @@ class TestManagers(unittest.TestCase):
         args = cli.cli(f"map view {fn}")
         ex = managers.view(args)
         os.remove(fn)
+        self.assertEqual(0, ex)
 
     def test_edit(self):
         """"""
@@ -250,7 +251,7 @@ class TestExperiments(unittest.TestCase):
 
 class TestOrientation(unittest.TestCase):
     """
-    `mapfile` provides a simple API to
+    `maptools` provides a simple API to
     """
 
     @classmethod
@@ -383,7 +384,7 @@ class TestPermutationMatrix(unittest.TestCase):
         self.assertTrue(numpy.array_equal(numpy.fromstring('2 1 3', sep=' ', dtype=int).reshape(1, 3), product))
         # iRHS multiplication
         permutation_matrix1 @= permutation_matrix1
-        self.assertTrue(numpy.array_equal(numpy.eye(3, dtype=int), permutation_matrix1))
+        self.assertTrue(numpy.array_equal(numpy.eye(3, dtype=int), numpy.asarray(permutation_matrix1)))
 
 
 class TestMapFile(unittest.TestCase):

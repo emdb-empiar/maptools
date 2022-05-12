@@ -1,4 +1,4 @@
-# `mapfile`
+# `maptools`
 
 The content of this package sets out to solve the complexity associated with MRC file space orientations. An MRC file is
 designed to capture multidimensional images with most common being 3D images. As with any image format, the user is at
@@ -22,7 +22,7 @@ It would be desirable to make it easy for users to be able to:
 
 > :bulb: **Note**: All examples below assume that the `mrcfile` package has been imported using:
 > ```python
-> import mapfile
+> import maptools
 > ```
 
 > :bulb: **Note**: It may be necessary to come up with another name for this attribute e.g.
@@ -33,7 +33,7 @@ It would be desirable to make it easy for users to be able to:
 ## Determine the current space orientation
 
 ```python
-with mapfile.MapFile('file.map') as mapfile:
+with maptools.MapFile('file.map') as mapfile:
     # assume a canonical file
     print(mapfile.orientaion)  # (cols='X', rows='Y', sections='Z')
 ```

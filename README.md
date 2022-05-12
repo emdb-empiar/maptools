@@ -25,30 +25,27 @@ It would be desirable to make it easy for users to be able to:
 > import maptools
 > ```
 
-> :bulb: **Note**: It may be necessary to come up with another name for this attribute e.g.
-> - `axes`
-> - `alignment`
-> - `axis_alignment`
-
 ## Determine the current space orientation
 
 ```python
 with maptools.MapFile('file.map') as mapfile:
     # assume a canonical file
-    print(mapfile.orientaion)  # (cols='X', rows='Y', sections='Z')
+    print(mapfile.orientaion)  # Orientation(cols='X', rows='Y', sections='Z')
+    # or display the orientation as integers
+    print(mapfile.orientation.to_integers()) # (1, 2, 3)
 ```
 
 ## Determine the current space handedness
 
 ```python
-with mapfile.MapFile('file.map') as mapfile:
+with maptools.MapFile('file.map') as mapfile:
     print(mapfile.space_handedness)  # 'right' | 'left'
 ```
 
 ## Change the space orientation using a simple interface
 
 ```python
-with mapfile.MapFile('file.map', mode='r+') as mapfile:
+with maptools.MapFile('file.map', mode='r+') as mapfile:
     print(mapfile.orientation)  # (cols='X', rows='Y', sections='Z')
     mapfile.orientation = mapfile.Orientation(cols='Z', rows='Y', sections='X')
     print(mapfile.orientation)  # (cols='Z', rows='Y', sections='X')
@@ -57,7 +54,7 @@ with mapfile.MapFile('file.map', mode='r+') as mapfile:
 ## Create a file using the specified space orientation
 
 ```python
-with mapfile.MapFile('file.map', mode='w') as mapfile:
+with maptools.MapFile('file.map', mode='w') as mapfile:
     # set the data
     mapfile.data = numpy.empty(shape=(10, 20, 30), dtype=numpy.uint8)
     mapfile.orientation = mapfile.Orientation(cols='Y', rows='X', sections='Z')

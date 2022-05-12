@@ -7,7 +7,12 @@ from maptools import models
 
 def view(args):
     """"""
-    with models.MapFile(args.file, colour=args.colour) as mapfile:
+    with models.MapFile(
+            args.file,
+            orientation=args.orientation,
+            colour=args.colour,
+            verbose=args.verbose
+    ) as mapfile:
         print(mapfile)
     return os.EX_OK
 
@@ -31,7 +36,7 @@ def edit(args):
     """
     with models.MapFile(
             args.file,
-            args.file_mode,
+            file_mode=args.file_mode,
             start=args.start,
             colour=args.colour,
             verbose=args.verbose
@@ -50,10 +55,13 @@ def create(args):
     """"""
     with models.MapFile(
             args.file,
-            args.file_mode,
+            file_mode='w',
+            start=args.start,
             orientation=(models.Orientation.from_string(args.orientation)),
             map_mode=args.map_mode,
-            voxel_size=args.voxel_sizes
+            voxel_size=args.voxel_sizes,
+            colour=args.colour,
+            verbose=args.verbose
     ) as mapfile:
         if args.ones:
             mapfile.data = numpy.ones(args.size)

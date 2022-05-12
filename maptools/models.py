@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import itertools
 import math
 import struct
 import unicodedata
@@ -155,7 +156,7 @@ class PermutationMatrix:
         permutation_matrix = numpy.zeros((len(_orientation), len(_orientation)), dtype=int)
         for index, value in enumerate(_orientation):
             permutation_matrix[index, _new_orientation.index(value)] = 1
-        return permutation_matrix
+        return cls(permutation_matrix)
 
     def __array__(self):
         return self._data
@@ -163,6 +164,21 @@ class PermutationMatrix:
     @property
     def shape(self):
         return self._data.shape
+
+    @property
+    def swap_sequences(self):
+        if numpy.array_equal(self._data, numpy.fromstring('1 0 0 0 1 0 0 0 1', sep=' ', dtype=int).reshape(3, 3)):
+            return []
+        elif numpy.array_equal(self._data, numpy.fromstring('1 0 0 0 0 1 0 1 0', sep=' ', dtype=int).reshape(3, 3)):
+            return [(0, 1)]
+        elif numpy.array_equal(self._data, numpy.fromstring('0 1 0 1 0 0 0 0 1', sep=' ', dtype=int).reshape(3, 3)):
+            return [(1, 2)]
+        elif numpy.array_equal(self._data, numpy.fromstring('0 0 1 0 1 0 1 0 0', sep=' ', dtype=int).reshape(3, 3)):
+            return [(0, 2)]
+        elif numpy.array_equal(self._data, numpy.fromstring('0 0 1 1 0 0 0 1 0', sep=' ', dtype=int).reshape(3, 3)):
+            return [(1, 2), (0, 2)]
+        elif numpy.array_equal(self._data, numpy.fromstring('0 1 0 0 0 1 1 0 0', sep=' ', dtype=int).reshape(3, 3)):
+            return [(0, 2), (0, 1)]
 
     @property
     def dtype(self):
@@ -188,6 +204,7 @@ class PermutationMatrix:
     def __rmatmul__(self, other):
         """RHS matrix multiplication"""
         # other must have as many cols as self has rows
+        print(f"{other = }")
         try:
             assert self.rows == other.shape[1]
         except AssertionError:
@@ -280,8 +297,15 @@ class MapFile:
     rows = MapFileAttribute('_nr')
     sections = MapFileAttribute('_ns')
 
-    def __init__(self, name, file_mode='r', orientation=Orientation(cols='X', rows='Y', sections='Z'),
-                 voxel_size=(1.0, 1.0, 1.0), map_mode=2, start=(0, 0, 0), colour=False, verbose=False):
+    def __init__(
+            self, name, file_mode='r',
+            orientation=Orientation(cols='X', rows='Y', sections='Z'),
+            voxel_size=(1.0, 1.0, 1.0),
+            map_mode=2,
+            start=(0, 0, 0),
+            colour=False,
+            verbose=False
+    ):
         """"""
         # todo: validate file modes in ['r', 'r+' and 'w']
         self.name = name
@@ -293,7 +317,7 @@ class MapFile:
                 numpy.array(voxel_size) @ PermutationMatrix.from_orientations(
                     (1, 2, 3),  # always start from the default
                     orientation.to_integers()
-                ).tolist()
+                )
             )
             # reset the map mode
             self._mode = map_mode
@@ -311,7 +335,7 @@ class MapFile:
 
     def __enter__(self):
         self.handle = open(self.name, f'{self.file_mode}b')
-        if self.file_mode in ['r', 'r+']: # since we are reading we defer to what is present
+        if self.file_mode in ['r', 'r+']:  # since we are reading we defer to what is present
             # source: ftp://ftp.ebi.ac.uk/pub/databases/emdb/doc/Map-format/current/EMDB_map_format.pdf
             # number of columns (fastest changing), rows, sections (slowest changing)
             self._nc, self._nr, self._ns = struct.unpack('<iii', self.handle.read(12))
@@ -489,21 +513,25 @@ class MapFile:
         """
         # reorient the volume
         permutation_matrix = self.orientation / orientation
+        swap_sequences = permutation_matrix.swap_sequences
+        for swap_sequence in swap_sequences:
+            self._data = numpy.swapaxes(self._data, *swap_sequence)
         # matrix multiply to get the new shape
         # we have to reverse the shape to apply the permutation
-        reversed_current_shape = numpy.asarray(self).shape[::-1]
+        # reversed_current_shape = numpy.asarray(self).shape[::-1]
         # get the reverse of the new shape
-        reversed_new_shape = reversed_current_shape @ permutation_matrix
+        # reversed_new_shape = reversed_current_shape @ permutation_matrix
         # reverse to get the actual shape to abe applied
-        new_shape = reversed_new_shape[::-1]
+        # new_shape = reversed_new_shape[::-1]
         # reshape the data
-        self._data = numpy.asarray(self).reshape(new_shape)
+        # self._data = numpy.asarray(self).reshape(new_shape)
         # set the new orientation
         self._orientation = orientation
         # also permute the voxel sizes
-        self.voxel_size = self.voxel_size @ permutation_matrix
-        # also permute the start fields
-
+        # fixme: ugly
+        self.voxel_size = tuple(
+            (numpy.array(self.voxel_size).reshape(1, 3) @ permutation_matrix).tolist()[0]
+        )
         # recalculate parameters
         self._prepare()
 

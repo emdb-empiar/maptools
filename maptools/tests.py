@@ -86,16 +86,17 @@ class TestManagers(unittest.TestCase):
     def test_file_modes(self):
         """Demonstrate that modifying a file with r+b does not truncate file. Call file.truncate() to do so."""
         with open(self.test_fn, 'wb') as f:
-            f.write(struct.pack('<10f', *(0.0, ) * 10))
+            f.write(struct.pack('<10f', *(0.0,) * 10))
         with open(self.test_fn, 'rb') as g:
             data = struct.unpack('<10f', g.read(10 * 4))
             print(f"before: {data}")
         with open(self.test_fn, 'r+b') as h:
             print(f"{h.tell() = }")
-            h.write(struct.pack('<5f', *(1.0, ) * 5))
+            h.write(struct.pack('<5f', *(1.0,) * 5))
         with open(self.test_fn, 'rb') as g:
             data = struct.unpack('<10f', g.read(10 * 4))
             print(f"after: {data}")
+
 
 class TestExperiments(unittest.TestCase):
     @classmethod
@@ -232,7 +233,7 @@ class TestExperiments(unittest.TestCase):
         orientation = 1, 2, 3
         new_orientation = 3, 2, 1
         permutation_matrix = models.PermutationMatrix.from_orientations(orientation, new_orientation)
-        new_shape = numpy.array(vol.shape).dot(permutation_matrix)
+        new_shape = numpy.array(vol.shape) @ permutation_matrix
         # print(new_shape)
         new_vol = vol.reshape(new_shape)
         self.assertEqual((30, 20, 10), new_vol.shape)
@@ -241,7 +242,7 @@ class TestExperiments(unittest.TestCase):
         orientation = 2, 1, 3
         new_orientation = 2, 3, 1
         permutation_matrix = models.PermutationMatrix.from_orientations(orientation, new_orientation)
-        new_shape = numpy.array(vol.shape).dot(permutation_matrix)
+        new_shape = numpy.array(vol.shape) @ permutation_matrix
         new_vol = vol.reshape(new_shape)
         self.assertEqual((10, 30, 20), new_vol.shape)
         # this should be the same as (2,1,3)->(1,2,3)->(2,3,1)
@@ -251,15 +252,12 @@ class TestExperiments(unittest.TestCase):
         final_orientation = 2, 3, 1
         intermediate_permutation_matrix = models.PermutationMatrix.from_orientations(orientation,
                                                                                      intermediate_orientation)
-        intermediate_shape = numpy.dot(
-            numpy.array(vol.shape),
-            intermediate_permutation_matrix
-        )
+        intermediate_shape =    numpy.array(vol.shape) @ intermediate_permutation_matrix
         intermediate_vol = vol.reshape(intermediate_shape)
         self.assertEqual((20, 10, 30), intermediate_vol.shape)
         final_permutation_matrix = models.PermutationMatrix.from_orientations(intermediate_orientation,
                                                                               final_orientation)
-        final_shape = numpy.array(intermediate_vol.shape).dot(final_permutation_matrix)
+        final_shape = numpy.array(intermediate_vol.shape) @ final_permutation_matrix
         final_vol = intermediate_vol.reshape(final_shape)
         self.assertEqual((10, 30, 20), final_vol.shape)
         # shape=(C,R,S), orientation=(3,1,2)
@@ -267,7 +265,7 @@ class TestExperiments(unittest.TestCase):
         orientation = 3, 1, 2
         new_orientation = 1, 2, 3  # double permutation
         permutation_matrix = models.PermutationMatrix.from_orientations(orientation, new_orientation)
-        new_shape = numpy.dot(numpy.array(vol.shape), permutation_matrix)
+        new_shape = numpy.array(vol.shape) @ permutation_matrix
         new_vol = vol.reshape(new_shape)
         self.assertEqual((20, 30, 10), new_vol.shape)
 
@@ -408,6 +406,21 @@ class TestPermutationMatrix(unittest.TestCase):
         # iRHS multiplication
         permutation_matrix1 @= permutation_matrix1
         self.assertTrue(numpy.array_equal(numpy.eye(3, dtype=int), numpy.asarray(permutation_matrix1)))
+
+    def test_swap_sequences(self):
+        """Since the shape is ZYX, the swap axes should be 'inverted' i.e. if we are to swap X and Y instead of swapping 0 1 we swap 1 2"""
+        swap_sequences = models.PermutationMatrix.from_orientations((1, 2, 3), (1, 2, 3)).swap_sequences
+        self.assertEqual([], swap_sequences)
+        swap_sequences = models.PermutationMatrix.from_orientations((1, 2, 3), (1, 3, 2)).swap_sequences
+        self.assertEqual([(0, 1)], swap_sequences)
+        swap_sequences = models.PermutationMatrix.from_orientations((1, 2, 3), (2, 1, 3)).swap_sequences
+        self.assertEqual([(1, 2)], swap_sequences)
+        swap_sequences = models.PermutationMatrix.from_orientations((1, 2, 3), (2, 3, 1)).swap_sequences
+        self.assertEqual([(1, 2), (0, 2)], swap_sequences)
+        swap_sequences = models.PermutationMatrix.from_orientations((1, 2, 3), (3, 2, 1)).swap_sequences
+        self.assertEqual([(0, 2)], swap_sequences)
+        swap_sequences = models.PermutationMatrix.from_orientations((1, 2, 3), (3, 1, 2)).swap_sequences
+        self.assertEqual([(0, 2), (0, 1)], swap_sequences)
 
 
 class TestMapFile(unittest.TestCase):
@@ -566,8 +579,14 @@ class TestMapFile(unittest.TestCase):
         with models.MapFile(self.test_fn, file_mode='w') as mapfile:
             # set data
             mapfile.data = numpy.random.rand(10, 20, 30)  # sections, rows, cols
+            print(f"{mapfile.data.shape = }")
+            print(f"{mapfile.orientation = }")
+            print(f"{mapfile.cols, mapfile.rows, mapfile.sections}")
             # change orientation to nonstandar YXZ
             mapfile.orientation = models.Orientation(cols='Y', rows='X', sections='Z')
+            print(f"{mapfile.data.shape = }")
+            print(f"{mapfile.orientation = }")
+            print(f"{mapfile.cols, mapfile.rows, mapfile.sections}")
             # now the following should be automatically inferred from the data
             self.assertEqual(20, mapfile.nc)
             self.assertEqual(30, mapfile.nr)

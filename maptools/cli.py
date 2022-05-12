@@ -15,6 +15,7 @@ file = {
 orientation = {
     'args': ['-O', '--orientation'],
     'kwargs': dict(
+        type=lambda s: s.upper(),
         choices=list(map(lambda t: ''.join(t), itertools.permutations('XYZ', 3))),  # all 3-permutations
         help="change the space orientation [default: XYZ]"
     )
@@ -89,7 +90,7 @@ def _add_arg(parser_: argparse.ArgumentParser, option: dict, **kwargs):
 parent_parser = argparse.ArgumentParser(add_help=False)
 parent_parser.add_argument('-v', '--verbose', default=False, action='store_true',
                            help="verbose output to terminal in addition to log files [default: False]")
-parent_parser.add_argument('--colour', default=False, action='store_true',
+parent_parser.add_argument('-c', '--colour', default=False, action='store_true',
                            help="highlight with colours [default: False]")
 
 subparsers = parser.add_subparsers(dest='command', title='Commands available')
@@ -102,6 +103,7 @@ view_parser = subparsers.add_parser(
     parents=[parent_parser]
 )
 _add_arg(view_parser, file)
+_add_arg(view_parser, orientation)
 
 # edit
 edit_parser = subparsers.add_parser(

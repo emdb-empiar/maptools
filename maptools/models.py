@@ -281,7 +281,7 @@ class MapFile:
     sections = MapFileAttribute('_ns')
 
     def __init__(self, name, file_mode='r', orientation=Orientation(cols='X', rows='Y', sections='Z'),
-                 voxel_size=(1.0, 1.0, 1.0), map_mode=2, start=(0, 0, 0), colour=True):
+                 voxel_size=(1.0, 1.0, 1.0), map_mode=2, start=(0, 0, 0), colour=False, verbose=False):
         """"""
         # todo: validate file modes in ['r', 'r+' and 'w']
         self.name = name
@@ -295,18 +295,19 @@ class MapFile:
                     orientation.to_integers()
                 ).tolist()
             )
+            # reset the map mode
+            self._mode = map_mode
+            # start
+            self._start = start
         self.handle = None
         # create attributes
         for attr in self.__attrs__:
             if hasattr(self, attr):
                 continue
             setattr(self, attr, None)
-        # reset the map mode
-        self._mode = map_mode
-        # start
-        self._start = start
-        # colour
+        # colour, verbose
         self.colour = colour
+        self.verbose = verbose
 
     def __enter__(self):
         self.handle = open(self.name, f'{self.file_mode}b')
@@ -363,10 +364,7 @@ class MapFile:
 
             # read the data
             dtype = self._mode_to_dtype()
-            print(Styled(f"[[ '[info] current mode: {self._mode}'|fg-yellow ]]"))
-            print(Styled(f"[[ '[info] reading data to type={dtype}...'|fg-yellow ]]"))
-            # byteorder
-            # fixme: bug when changing mode
+            # todo: byteorder
             self._data = numpy.frombuffer(self.handle.read(), dtype=dtype).reshape(self.ns, self.nr, self.nc)
             # voxel size
             self._voxel_size = tuple(numpy.divide(
@@ -403,14 +401,17 @@ class MapFile:
 
     @mode.setter
     def mode(self, value):
+        """"""
         try:
             assert value in cli.MAP_MODES
         except AssertionError:
             raise ValueError(f"invalid mode={value}; should be one of {', '.join(cli.MAP_MODES)}")
         if self._mode in cli.INT_MAP_MODES and value in cli.FLOAT_MAP_MODES:
-            warnings.warn(f"potential increase in file size by converting from int to float voxels", UserWarning)
+            warnings.warn(f"file size will increase by converting from int to float voxels", UserWarning)
         elif self._mode in cli.FLOAT_MAP_MODES and value in cli.INT_MAP_MODES:
             warnings.warn(f"truncating data by converting from float to int voxels", UserWarning)
+        if self.verbose:
+            print(Styled(f"[[ '[info] changing mode from {self.mode} to {value}...'|fg-orange_3 ]]"))
         self._mode = value
         self._prepare()
 
@@ -517,11 +518,11 @@ class MapFile:
         self._z_length, self._y_length, self._x_length = numpy.multiply(self._data.shape,
                                                                         numpy.array(self._voxel_size)[::-1])
         self._mapc, self._mapr, self._maps = self.orientation.to_integers()
-        self._rms = math.sqrt(numpy.mean(numpy.square(self._data)))
         # change dtype if necessary
         dtype = self._mode_to_dtype()
         self._data = self._data.astype(dtype)
         self._amin, self._amax, self._amean = self._data.min(), self._data.max(), self._data.mean()
+        self._rms = math.sqrt(numpy.mean(numpy.square(self._data)))
 
     def _dtype_to_mode(self):
         """"""
@@ -586,9 +587,8 @@ class MapFile:
         self.handle.write(struct.pack(f'<800x'))
 
     def _write_data(self):
-        dtype = self._mode_to_dtype()
-        # change dtype and write
-        self._data.astype(dtype).tofile(self.handle)
+        self._data.tofile(self.handle)
+        self.handle.truncate()
 
     def __str__(self):
         alpha = unicodedata.lookup('GREEK SMALL LETTER ALPHA')

@@ -2,13 +2,12 @@ import os
 import pathlib
 import random
 import secrets
+import struct
 import sys
 import unittest
-import warnings
 
 import numpy
 
-import maptools
 from maptools import models, cli, managers, utils
 
 BASE_DIR = pathlib.Path(__file__).parent.parent
@@ -46,30 +45,57 @@ class TestCLI(unittest.TestCase):
 
 
 class TestManagers(unittest.TestCase):
+    def setUp(self) -> None:
+        self.test_fn = TEST_DATA_DIR / f"file-{secrets.token_urlsafe(3)}.map"
+        shape = random.choices(range(10, 50), k=3)
+        with models.MapFile(self.test_fn, 'w') as mapfile:
+            mapfile.data = numpy.random.rand(*shape)
+
+    def tearDown(self) -> None:
+        try:
+            os.remove(self.test_fn)
+        except FileNotFoundError:
+            pass
+
     def test_view(self):
         """"""
-        fn = TEST_DATA_DIR / f"file-{secrets.token_urlsafe(3)}.map"
-        with models.MapFile(fn, 'w') as mapf:
-            mapf.data = numpy.random.rand(21, 31, 14)
-        args = cli.cli(f"map view {fn}")
+        args = cli.cli(f"map view {self.test_fn}")
         ex = managers.view(args)
-        os.remove(fn)
         self.assertEqual(0, ex)
 
     def test_edit(self):
         """"""
-        fn = TEST_DATA_DIR / f"file-{secrets.token_urlsafe(3)}.map"
-        with models.MapFile(fn, 'w') as mapf:
-            mapf.data = numpy.random.rand(37, 16, 62)
-        # orientation
-        args = cli.cli(f"map edit {fn} --orientation=YZX")
+        args = cli.cli(f"map edit {self.test_fn}")
         managers.edit(args)
-        with models.MapFile(fn) as mapf2:
-            self.assertEqual((2, 3, 1), mapf2.orientation.to_integers())
-            # todo: all the other attributes that should have been affected by the orientation
-        # managers.view(args)
-        os.remove(fn)
 
+    def test_edit_change_orientation(self):
+        """"""
+        # orientation
+        args = cli.cli(f"map edit {self.test_fn} --orientation=YZX")
+        managers.edit(args)
+        with models.MapFile(self.test_fn) as mapfile:
+            self.assertEqual((2, 3, 1), mapfile.orientation.to_integers())
+
+    def test_edit_change_mode(self):
+        """"""
+        args = cli.cli(f"map edit {self.test_fn} --map-mode=0 -v")
+        managers.edit(args)
+        args = cli.cli(f"map edit {self.test_fn} --map-mode=1")
+        managers.edit(args)
+
+    def test_file_modes(self):
+        """Demonstrate that modifying a file with r+b does not truncate file. Call file.truncate() to do so."""
+        with open(self.test_fn, 'wb') as f:
+            f.write(struct.pack('<10f', *(0.0, ) * 10))
+        with open(self.test_fn, 'rb') as g:
+            data = struct.unpack('<10f', g.read(10 * 4))
+            print(f"before: {data}")
+        with open(self.test_fn, 'r+b') as h:
+            print(f"{h.tell() = }")
+            h.write(struct.pack('<5f', *(1.0, ) * 5))
+        with open(self.test_fn, 'rb') as g:
+            data = struct.unpack('<10f', g.read(10 * 4))
+            print(f"after: {data}")
 
 class TestExperiments(unittest.TestCase):
     @classmethod
@@ -117,10 +143,7 @@ class TestExperiments(unittest.TestCase):
     def test_get_vol(self):
         cols, rows, sects = random.sample(range(10, 30), k=3)
         # cols, rows, sects = (10, ) * 3
-        print(cols, rows, sects)
         vol = utils.get_vol(cols, rows, sects)
-        print(vol.strides)
-        print(vol.itemsize)
         self.assertIsInstance(vol, numpy.ndarray)
         self.assertEqual((cols, rows, sects), vol.shape)
         self.assertEqual(numpy.uint8, vol.dtype)
@@ -261,9 +284,9 @@ class TestOrientation(unittest.TestCase):
         cls.random_name = TEST_DATA_DIR / f"file-{secrets.token_urlsafe(3)}.map"
         # random size
         cls.cols, cls.rows, cls.sections = random.sample(range(10, 30), k=3)
-        with models.MapFile(cls.random_name, 'w') as mapf:
-            mapf.data = utils.get_vol(cls.cols, cls.rows, cls.sections)
-            # mapf.data = voxel_size = 1.5
+        with models.MapFile(cls.random_name, 'w') as mapfile:
+            mapfile.data = utils.get_vol(cls.cols, cls.rows, cls.sections)
+            # mapfile.data = voxel_size = 1.5
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -342,9 +365,9 @@ class TestPermutationMatrix(unittest.TestCase):
         cls.random_name = TEST_DATA_DIR / f"file-{secrets.token_urlsafe(3)}.map"
         # random size
         cls.cols, cls.rows, cls.sections = random.sample(range(10, 30), k=3)
-        with models.MapFile(cls.random_name, 'w') as mapf:
-            mapf.data = utils.get_vol(cls.cols, cls.rows, cls.sections)
-            # mapf.data = voxel_size = 1.5
+        with models.MapFile(cls.random_name, 'w') as mapfile:
+            mapfile.data = utils.get_vol(cls.cols, cls.rows, cls.sections)
+            # mapfile.data = voxel_size = 1.5
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -400,328 +423,328 @@ class TestMapFile(unittest.TestCase):
     def test_create_empty(self):
         """"""
         with self.assertRaises(ValueError):
-            with models.MapFile(self.test_fn, file_mode='w') as mapf:
+            with models.MapFile(self.test_fn, file_mode='w') as mapfile:
                 # everything is None or the default value
-                self.assertIsNone(mapf.nc)
-                self.assertIsNone(mapf.nr)
-                self.assertIsNone(mapf.ns)
-                self.assertEqual(2, mapf.mode)
-                self.assertEqual((0, 0, 0), mapf.start)
-                self.assertIsNone(mapf.nx)
-                self.assertIsNone(mapf.ny)
-                self.assertIsNone(mapf.nz)
-                self.assertIsNone(mapf.x_length)
-                self.assertIsNone(mapf.y_length)
-                self.assertIsNone(mapf.z_length)
-                self.assertEqual(90.0, mapf.alpha)
-                self.assertEqual(90.0, mapf.beta)
-                self.assertEqual(90.0, mapf.gamma)
-                self.assertEqual(1, mapf.mapc)
-                self.assertEqual(2, mapf.mapr)
-                self.assertEqual(3, mapf.maps)
-                self.assertIsNone(mapf.amin)
-                self.assertIsNone(mapf.amax)
-                self.assertIsNone(mapf.amean)
-                self.assertEqual(1, mapf.ispg)
-                self.assertEqual(0, mapf.nsymbt)
-                self.assertEqual(0, mapf.lskflg)
-                self.assertEqual(0.0, mapf.s11)
-                self.assertEqual(0.0, mapf.s12)
-                self.assertEqual(0.0, mapf.s13)
-                self.assertEqual(0.0, mapf.s21)
-                self.assertEqual(0.0, mapf.s22)
-                self.assertEqual(0.0, mapf.s23)
-                self.assertEqual(0.0, mapf.s31)
-                self.assertEqual(0.0, mapf.s32)
-                self.assertEqual(0.0, mapf.s33)
-                self.assertEqual((0,) * 15, mapf.extra)
-                self.assertEqual(b'MAP ', mapf.map)
-                self.assertEqual(bytes([68, 68, 0, 0]), mapf.machst)
-                self.assertEqual(0, mapf.nlabl)
-                self.assertIsNone(mapf.cols)
-                self.assertIsNone(mapf.rows)
-                self.assertIsNone(mapf.sections)
+                self.assertIsNone(mapfile.nc)
+                self.assertIsNone(mapfile.nr)
+                self.assertIsNone(mapfile.ns)
+                self.assertEqual(2, mapfile.mode)
+                self.assertEqual((0, 0, 0), mapfile.start)
+                self.assertIsNone(mapfile.nx)
+                self.assertIsNone(mapfile.ny)
+                self.assertIsNone(mapfile.nz)
+                self.assertIsNone(mapfile.x_length)
+                self.assertIsNone(mapfile.y_length)
+                self.assertIsNone(mapfile.z_length)
+                self.assertEqual(90.0, mapfile.alpha)
+                self.assertEqual(90.0, mapfile.beta)
+                self.assertEqual(90.0, mapfile.gamma)
+                self.assertEqual(1, mapfile.mapc)
+                self.assertEqual(2, mapfile.mapr)
+                self.assertEqual(3, mapfile.maps)
+                self.assertIsNone(mapfile.amin)
+                self.assertIsNone(mapfile.amax)
+                self.assertIsNone(mapfile.amean)
+                self.assertEqual(1, mapfile.ispg)
+                self.assertEqual(0, mapfile.nsymbt)
+                self.assertEqual(0, mapfile.lskflg)
+                self.assertEqual(0.0, mapfile.s11)
+                self.assertEqual(0.0, mapfile.s12)
+                self.assertEqual(0.0, mapfile.s13)
+                self.assertEqual(0.0, mapfile.s21)
+                self.assertEqual(0.0, mapfile.s22)
+                self.assertEqual(0.0, mapfile.s23)
+                self.assertEqual(0.0, mapfile.s31)
+                self.assertEqual(0.0, mapfile.s32)
+                self.assertEqual(0.0, mapfile.s33)
+                self.assertEqual((0,) * 15, mapfile.extra)
+                self.assertEqual(b'MAP ', mapfile.map)
+                self.assertEqual(bytes([68, 68, 0, 0]), mapfile.machst)
+                self.assertEqual(0, mapfile.nlabl)
+                self.assertIsNone(mapfile.cols)
+                self.assertIsNone(mapfile.rows)
+                self.assertIsNone(mapfile.sections)
 
     def test_create_with_data(self):
         """"""
         # create
-        with models.MapFile(self.test_fn, file_mode='w') as mapf:
+        with models.MapFile(self.test_fn, file_mode='w') as mapfile:
             # set data
-            mapf.data = numpy.random.rand(10, 20, 30)  # sections, rows, cols
+            mapfile.data = numpy.random.rand(10, 20, 30)  # sections, rows, cols
             # now the following should be automatically inferred from the data
-            self.assertEqual(30, mapf.nc)
-            self.assertEqual(20, mapf.nr)
-            self.assertEqual(10, mapf.ns)
-            self.assertEqual(2, mapf.mode)
-            self.assertEqual((0, 0, 0), mapf.start)
-            self.assertEqual(30, mapf.nx)
-            self.assertEqual(20, mapf.ny)
-            self.assertEqual(10, mapf.nz)
-            self.assertEqual(30.0, mapf.x_length)
-            self.assertEqual(20.0, mapf.y_length)
-            self.assertEqual(10.0, mapf.z_length)
-            self.assertEqual(90.0, mapf.alpha)
-            self.assertEqual(90.0, mapf.beta)
-            self.assertEqual(90.0, mapf.gamma)
-            self.assertEqual(1, mapf.mapc)
-            self.assertEqual(2, mapf.mapr)
-            self.assertEqual(3, mapf.maps)
-            self.assertIsNotNone(mapf.amin)
-            self.assertIsNotNone(mapf.amax)
-            self.assertIsNotNone(mapf.amean)
-            self.assertEqual(1, mapf.ispg)
-            self.assertEqual(0, mapf.nsymbt)
-            self.assertEqual(0, mapf.lskflg)
-            self.assertEqual(0.0, mapf.s11)
-            self.assertEqual(0.0, mapf.s12)
-            self.assertEqual(0.0, mapf.s13)
-            self.assertEqual(0.0, mapf.s21)
-            self.assertEqual(0.0, mapf.s22)
-            self.assertEqual(0.0, mapf.s23)
-            self.assertEqual(0.0, mapf.s31)
-            self.assertEqual(0.0, mapf.s32)
-            self.assertEqual(0.0, mapf.s33)
-            self.assertEqual((0,) * 15, mapf.extra)
-            self.assertEqual(b'MAP ', mapf.map)
-            self.assertEqual(bytes([68, 68, 0, 0]), mapf.machst)
-            self.assertEqual(0, mapf.nlabl)
-            self.assertEqual(30, mapf.cols)
-            self.assertEqual(20, mapf.rows)
-            self.assertEqual(10, mapf.sections)
-            self.assertEqual("Orientation(cols='X', rows='Y', sections='Z')", str(mapf.orientation))
-            self.assertEqual((1.0, 1.0, 1.0), mapf.voxel_size)
-            self.assertEqual('float32', mapf.data.dtype.name)
+            self.assertEqual(30, mapfile.nc)
+            self.assertEqual(20, mapfile.nr)
+            self.assertEqual(10, mapfile.ns)
+            self.assertEqual(2, mapfile.mode)
+            self.assertEqual((0, 0, 0), mapfile.start)
+            self.assertEqual(30, mapfile.nx)
+            self.assertEqual(20, mapfile.ny)
+            self.assertEqual(10, mapfile.nz)
+            self.assertEqual(30.0, mapfile.x_length)
+            self.assertEqual(20.0, mapfile.y_length)
+            self.assertEqual(10.0, mapfile.z_length)
+            self.assertEqual(90.0, mapfile.alpha)
+            self.assertEqual(90.0, mapfile.beta)
+            self.assertEqual(90.0, mapfile.gamma)
+            self.assertEqual(1, mapfile.mapc)
+            self.assertEqual(2, mapfile.mapr)
+            self.assertEqual(3, mapfile.maps)
+            self.assertIsNotNone(mapfile.amin)
+            self.assertIsNotNone(mapfile.amax)
+            self.assertIsNotNone(mapfile.amean)
+            self.assertEqual(1, mapfile.ispg)
+            self.assertEqual(0, mapfile.nsymbt)
+            self.assertEqual(0, mapfile.lskflg)
+            self.assertEqual(0.0, mapfile.s11)
+            self.assertEqual(0.0, mapfile.s12)
+            self.assertEqual(0.0, mapfile.s13)
+            self.assertEqual(0.0, mapfile.s21)
+            self.assertEqual(0.0, mapfile.s22)
+            self.assertEqual(0.0, mapfile.s23)
+            self.assertEqual(0.0, mapfile.s31)
+            self.assertEqual(0.0, mapfile.s32)
+            self.assertEqual(0.0, mapfile.s33)
+            self.assertEqual((0,) * 15, mapfile.extra)
+            self.assertEqual(b'MAP ', mapfile.map)
+            self.assertEqual(bytes([68, 68, 0, 0]), mapfile.machst)
+            self.assertEqual(0, mapfile.nlabl)
+            self.assertEqual(30, mapfile.cols)
+            self.assertEqual(20, mapfile.rows)
+            self.assertEqual(10, mapfile.sections)
+            self.assertEqual("Orientation(cols='X', rows='Y', sections='Z')", str(mapfile.orientation))
+            self.assertEqual((1.0, 1.0, 1.0), mapfile.voxel_size)
+            self.assertEqual('float32', mapfile.data.dtype.name)
         # mapfile is closed
         # read
-        with models.MapFile(self.test_fn) as mapf2:
-            self.assertEqual(30, mapf2.nc)
-            self.assertEqual(20, mapf2.nr)
-            self.assertEqual(10, mapf2.ns)
-            self.assertEqual(2, mapf2.mode)
-            self.assertEqual((0, 0, 0), mapf2.start)
-            self.assertEqual(30, mapf2.nx)
-            self.assertEqual(20, mapf2.ny)
-            self.assertEqual(10, mapf2.nz)
-            self.assertEqual(30.0, mapf2.x_length)
-            self.assertEqual(20.0, mapf2.y_length)
-            self.assertEqual(10.0, mapf2.z_length)
-            self.assertEqual(90.0, mapf2.alpha)
-            self.assertEqual(90.0, mapf2.beta)
-            self.assertEqual(90.0, mapf2.gamma)
-            self.assertEqual(1, mapf2.mapc)
-            self.assertEqual(2, mapf2.mapr)
-            self.assertEqual(3, mapf2.maps)
-            self.assertIsNotNone(mapf2.amin)
-            self.assertIsNotNone(mapf2.amax)
-            self.assertIsNotNone(mapf2.amean)
-            self.assertEqual(1, mapf2.ispg)
-            self.assertEqual(0, mapf2.nsymbt)
-            self.assertEqual(0, mapf2.lskflg)
-            self.assertEqual(0.0, mapf2.s11)
-            self.assertEqual(0.0, mapf2.s12)
-            self.assertEqual(0.0, mapf2.s13)
-            self.assertEqual(0.0, mapf2.s21)
-            self.assertEqual(0.0, mapf2.s22)
-            self.assertEqual(0.0, mapf2.s23)
-            self.assertEqual(0.0, mapf2.s31)
-            self.assertEqual(0.0, mapf2.s32)
-            self.assertEqual(0.0, mapf2.s33)
-            self.assertEqual((0,) * 15, mapf2.extra)
-            self.assertEqual(b'MAP ', mapf2.map)
-            self.assertEqual(bytes([68, 68, 0, 0]), mapf2.machst)
-            self.assertEqual(0, mapf2.nlabl)
-            self.assertEqual(30, mapf2.cols)
-            self.assertEqual(20, mapf2.rows)
-            self.assertEqual(10, mapf2.sections)
-            self.assertEqual("Orientation(cols='X', rows='Y', sections='Z')", str(mapf2.orientation))
-            self.assertEqual((1.0, 1.0, 1.0), mapf2.voxel_size)
-            self.assertEqual('float32', mapf2.data.dtype.name)
+        with models.MapFile(self.test_fn) as mapfile2:
+            self.assertEqual(30, mapfile2.nc)
+            self.assertEqual(20, mapfile2.nr)
+            self.assertEqual(10, mapfile2.ns)
+            self.assertEqual(2, mapfile2.mode)
+            self.assertEqual((0, 0, 0), mapfile2.start)
+            self.assertEqual(30, mapfile2.nx)
+            self.assertEqual(20, mapfile2.ny)
+            self.assertEqual(10, mapfile2.nz)
+            self.assertEqual(30.0, mapfile2.x_length)
+            self.assertEqual(20.0, mapfile2.y_length)
+            self.assertEqual(10.0, mapfile2.z_length)
+            self.assertEqual(90.0, mapfile2.alpha)
+            self.assertEqual(90.0, mapfile2.beta)
+            self.assertEqual(90.0, mapfile2.gamma)
+            self.assertEqual(1, mapfile2.mapc)
+            self.assertEqual(2, mapfile2.mapr)
+            self.assertEqual(3, mapfile2.maps)
+            self.assertIsNotNone(mapfile2.amin)
+            self.assertIsNotNone(mapfile2.amax)
+            self.assertIsNotNone(mapfile2.amean)
+            self.assertEqual(1, mapfile2.ispg)
+            self.assertEqual(0, mapfile2.nsymbt)
+            self.assertEqual(0, mapfile2.lskflg)
+            self.assertEqual(0.0, mapfile2.s11)
+            self.assertEqual(0.0, mapfile2.s12)
+            self.assertEqual(0.0, mapfile2.s13)
+            self.assertEqual(0.0, mapfile2.s21)
+            self.assertEqual(0.0, mapfile2.s22)
+            self.assertEqual(0.0, mapfile2.s23)
+            self.assertEqual(0.0, mapfile2.s31)
+            self.assertEqual(0.0, mapfile2.s32)
+            self.assertEqual(0.0, mapfile2.s33)
+            self.assertEqual((0,) * 15, mapfile2.extra)
+            self.assertEqual(b'MAP ', mapfile2.map)
+            self.assertEqual(bytes([68, 68, 0, 0]), mapfile2.machst)
+            self.assertEqual(0, mapfile2.nlabl)
+            self.assertEqual(30, mapfile2.cols)
+            self.assertEqual(20, mapfile2.rows)
+            self.assertEqual(10, mapfile2.sections)
+            self.assertEqual("Orientation(cols='X', rows='Y', sections='Z')", str(mapfile2.orientation))
+            self.assertEqual((1.0, 1.0, 1.0), mapfile2.voxel_size)
+            self.assertEqual('float32', mapfile2.data.dtype.name)
 
     def test_create_standard_then_modify_to_nonstandard(self):
         """"""
         # create
-        with models.MapFile(self.test_fn, file_mode='w') as mapf:
+        with models.MapFile(self.test_fn, file_mode='w') as mapfile:
             # set data
-            mapf.data = numpy.random.rand(10, 20, 30)  # sections, rows, cols
+            mapfile.data = numpy.random.rand(10, 20, 30)  # sections, rows, cols
             # change orientation to nonstandar YXZ
-            mapf.orientation = models.Orientation(cols='Y', rows='X', sections='Z')
+            mapfile.orientation = models.Orientation(cols='Y', rows='X', sections='Z')
             # now the following should be automatically inferred from the data
-            self.assertEqual(20, mapf.nc)
-            self.assertEqual(30, mapf.nr)
-            self.assertEqual(10, mapf.ns)
+            self.assertEqual(20, mapfile.nc)
+            self.assertEqual(30, mapfile.nr)
+            self.assertEqual(10, mapfile.ns)
             # change orientation to nonstandard YZX
             # S=10, R=20, C=30
             # C=30, R=20, S=10
             # X Y Z
             # Y Z X
             # C'=20, R'=10, S'=30
-            mapf.orientation = models.Orientation(cols='Y', rows='Z', sections='X')
-            self.assertEqual(20, mapf.nc)
-            self.assertEqual(10, mapf.nr)
-            self.assertEqual(30, mapf.ns)
+            mapfile.orientation = models.Orientation(cols='Y', rows='Z', sections='X')
+            self.assertEqual(20, mapfile.nc)
+            self.assertEqual(10, mapfile.nr)
+            self.assertEqual(30, mapfile.ns)
             # change orientation to nonstandard YZX
-            mapf.orientation = models.Orientation(cols='Z', rows='Y', sections='X')
+            mapfile.orientation = models.Orientation(cols='Z', rows='Y', sections='X')
             # Z Y X
-            self.assertEqual(10, mapf.nc)
-            self.assertEqual(20, mapf.nr)
-            self.assertEqual(30, mapf.ns)
+            self.assertEqual(10, mapfile.nc)
+            self.assertEqual(20, mapfile.nr)
+            self.assertEqual(30, mapfile.ns)
             # let's do all the other orientation permutations
             # Z X Y
-            mapf.orientation = models.Orientation(cols='Z', rows='X', sections='Y')
-            self.assertEqual(10, mapf.nc)
-            self.assertEqual(30, mapf.nr)
-            self.assertEqual(20, mapf.ns)
+            mapfile.orientation = models.Orientation(cols='Z', rows='X', sections='Y')
+            self.assertEqual(10, mapfile.nc)
+            self.assertEqual(30, mapfile.nr)
+            self.assertEqual(20, mapfile.ns)
             # X Z Y
-            mapf.orientation = models.Orientation(cols='X', rows='Z', sections='Y')
-            self.assertEqual(30, mapf.nc)
-            self.assertEqual(10, mapf.nr)
-            self.assertEqual(20, mapf.ns)
+            mapfile.orientation = models.Orientation(cols='X', rows='Z', sections='Y')
+            self.assertEqual(30, mapfile.nc)
+            self.assertEqual(10, mapfile.nr)
+            self.assertEqual(20, mapfile.ns)
 
         # mapfile is closed
         # read
-        with models.MapFile(self.test_fn) as mapf2:
-            self.assertEqual(30, mapf2.nc)
-            self.assertEqual(10, mapf2.nr)
-            self.assertEqual(20, mapf2.ns)
-            self.assertEqual(2, mapf2.mode)
-            self.assertEqual((0, 0, 0), mapf2.start)
-            self.assertEqual(30, mapf2.nx)
-            self.assertEqual(10, mapf2.ny)
-            self.assertEqual(20, mapf2.nz)
-            self.assertEqual(30.0, mapf2.x_length)
-            self.assertEqual(10.0, mapf2.y_length)
-            self.assertEqual(20.0, mapf2.z_length)
-            self.assertEqual(90.0, mapf2.alpha)
-            self.assertEqual(90.0, mapf2.beta)
-            self.assertEqual(90.0, mapf2.gamma)
-            self.assertEqual(1, mapf2.mapc)
-            self.assertEqual(3, mapf2.mapr)
-            self.assertEqual(2, mapf2.maps)
-            self.assertIsNotNone(mapf2.amin)
-            self.assertIsNotNone(mapf2.amax)
-            self.assertIsNotNone(mapf2.amean)
-            self.assertEqual(1, mapf2.ispg)
-            self.assertEqual(0, mapf2.nsymbt)
-            self.assertEqual(0, mapf2.lskflg)
-            self.assertEqual(0.0, mapf2.s11)
-            self.assertEqual(0.0, mapf2.s12)
-            self.assertEqual(0.0, mapf2.s13)
-            self.assertEqual(0.0, mapf2.s21)
-            self.assertEqual(0.0, mapf2.s22)
-            self.assertEqual(0.0, mapf2.s23)
-            self.assertEqual(0.0, mapf2.s31)
-            self.assertEqual(0.0, mapf2.s32)
-            self.assertEqual(0.0, mapf2.s33)
-            self.assertEqual((0,) * 15, mapf2.extra)
-            self.assertEqual(b'MAP ', mapf2.map)
-            self.assertEqual(bytes([68, 68, 0, 0]), mapf2.machst)
-            self.assertEqual(0, mapf2.nlabl)
-            self.assertEqual(30, mapf2.cols)
-            self.assertEqual(10, mapf2.rows)
-            self.assertEqual(20, mapf2.sections)
-            self.assertEqual("Orientation(cols='X', rows='Z', sections='Y')", str(mapf2.orientation))
-            self.assertEqual((1.0, 1.0, 1.0), mapf2.voxel_size)
-            self.assertEqual('float32', mapf2.data.dtype.name)
+        with models.MapFile(self.test_fn) as mapfile2:
+            self.assertEqual(30, mapfile2.nc)
+            self.assertEqual(10, mapfile2.nr)
+            self.assertEqual(20, mapfile2.ns)
+            self.assertEqual(2, mapfile2.mode)
+            self.assertEqual((0, 0, 0), mapfile2.start)
+            self.assertEqual(30, mapfile2.nx)
+            self.assertEqual(10, mapfile2.ny)
+            self.assertEqual(20, mapfile2.nz)
+            self.assertEqual(30.0, mapfile2.x_length)
+            self.assertEqual(10.0, mapfile2.y_length)
+            self.assertEqual(20.0, mapfile2.z_length)
+            self.assertEqual(90.0, mapfile2.alpha)
+            self.assertEqual(90.0, mapfile2.beta)
+            self.assertEqual(90.0, mapfile2.gamma)
+            self.assertEqual(1, mapfile2.mapc)
+            self.assertEqual(3, mapfile2.mapr)
+            self.assertEqual(2, mapfile2.maps)
+            self.assertIsNotNone(mapfile2.amin)
+            self.assertIsNotNone(mapfile2.amax)
+            self.assertIsNotNone(mapfile2.amean)
+            self.assertEqual(1, mapfile2.ispg)
+            self.assertEqual(0, mapfile2.nsymbt)
+            self.assertEqual(0, mapfile2.lskflg)
+            self.assertEqual(0.0, mapfile2.s11)
+            self.assertEqual(0.0, mapfile2.s12)
+            self.assertEqual(0.0, mapfile2.s13)
+            self.assertEqual(0.0, mapfile2.s21)
+            self.assertEqual(0.0, mapfile2.s22)
+            self.assertEqual(0.0, mapfile2.s23)
+            self.assertEqual(0.0, mapfile2.s31)
+            self.assertEqual(0.0, mapfile2.s32)
+            self.assertEqual(0.0, mapfile2.s33)
+            self.assertEqual((0,) * 15, mapfile2.extra)
+            self.assertEqual(b'MAP ', mapfile2.map)
+            self.assertEqual(bytes([68, 68, 0, 0]), mapfile2.machst)
+            self.assertEqual(0, mapfile2.nlabl)
+            self.assertEqual(30, mapfile2.cols)
+            self.assertEqual(10, mapfile2.rows)
+            self.assertEqual(20, mapfile2.sections)
+            self.assertEqual("Orientation(cols='X', rows='Z', sections='Y')", str(mapfile2.orientation))
+            self.assertEqual((1.0, 1.0, 1.0), mapfile2.voxel_size)
+            self.assertEqual('float32', mapfile2.data.dtype.name)
 
     def test_read_and_modify(self):
         """"""
-        with models.MapFile(self.test_fn, file_mode='w') as mapf:
+        with models.MapFile(self.test_fn, file_mode='w') as mapfile:
             # set data
-            mapf.data = numpy.random.rand(10, 20, 30)  # sections, rows, cols
-            self.assertEqual(30, mapf.nc)
-            self.assertEqual(20, mapf.nr)
-            self.assertEqual(10, mapf.ns)
-            self.assertEqual(2, mapf.mode)
-            self.assertEqual((0, 0, 0), mapf.start)
-            self.assertEqual(30, mapf.nx)
-            self.assertEqual(20, mapf.ny)
-            self.assertEqual(10, mapf.nz)
-            self.assertEqual(30.0, mapf.x_length)
-            self.assertEqual(20.0, mapf.y_length)
-            self.assertEqual(10.0, mapf.z_length)
-            self.assertEqual(90.0, mapf.alpha)
-            self.assertEqual(90.0, mapf.beta)
-            self.assertEqual(90.0, mapf.gamma)
-            self.assertEqual(1, mapf.mapc)
-            self.assertEqual(2, mapf.mapr)
-            self.assertEqual(3, mapf.maps)
-            self.assertIsNotNone(mapf.amin)
-            self.assertIsNotNone(mapf.amax)
-            self.assertIsNotNone(mapf.amean)
-            self.assertEqual(1, mapf.ispg)
-            self.assertEqual(0, mapf.nsymbt)
-            self.assertEqual(0, mapf.lskflg)
-            self.assertEqual(0.0, mapf.s11)
-            self.assertEqual(0.0, mapf.s12)
-            self.assertEqual(0.0, mapf.s13)
-            self.assertEqual(0.0, mapf.s21)
-            self.assertEqual(0.0, mapf.s22)
-            self.assertEqual(0.0, mapf.s23)
-            self.assertEqual(0.0, mapf.s31)
-            self.assertEqual(0.0, mapf.s32)
-            self.assertEqual(0.0, mapf.s33)
-            self.assertEqual((0,) * 15, mapf.extra)
-            self.assertEqual(b'MAP ', mapf.map)
-            self.assertEqual(bytes([68, 68, 0, 0]), mapf.machst)
-            self.assertEqual(0, mapf.nlabl)
-            self.assertEqual(30, mapf.cols)
-            self.assertEqual(20, mapf.rows)
-            self.assertEqual(10, mapf.sections)
-            self.assertEqual("Orientation(cols='X', rows='Y', sections='Z')", str(mapf.orientation))
-            self.assertEqual((1.0, 1.0, 1.0), mapf.voxel_size)
+            mapfile.data = numpy.random.rand(10, 20, 30)  # sections, rows, cols
+            self.assertEqual(30, mapfile.nc)
+            self.assertEqual(20, mapfile.nr)
+            self.assertEqual(10, mapfile.ns)
+            self.assertEqual(2, mapfile.mode)
+            self.assertEqual((0, 0, 0), mapfile.start)
+            self.assertEqual(30, mapfile.nx)
+            self.assertEqual(20, mapfile.ny)
+            self.assertEqual(10, mapfile.nz)
+            self.assertEqual(30.0, mapfile.x_length)
+            self.assertEqual(20.0, mapfile.y_length)
+            self.assertEqual(10.0, mapfile.z_length)
+            self.assertEqual(90.0, mapfile.alpha)
+            self.assertEqual(90.0, mapfile.beta)
+            self.assertEqual(90.0, mapfile.gamma)
+            self.assertEqual(1, mapfile.mapc)
+            self.assertEqual(2, mapfile.mapr)
+            self.assertEqual(3, mapfile.maps)
+            self.assertIsNotNone(mapfile.amin)
+            self.assertIsNotNone(mapfile.amax)
+            self.assertIsNotNone(mapfile.amean)
+            self.assertEqual(1, mapfile.ispg)
+            self.assertEqual(0, mapfile.nsymbt)
+            self.assertEqual(0, mapfile.lskflg)
+            self.assertEqual(0.0, mapfile.s11)
+            self.assertEqual(0.0, mapfile.s12)
+            self.assertEqual(0.0, mapfile.s13)
+            self.assertEqual(0.0, mapfile.s21)
+            self.assertEqual(0.0, mapfile.s22)
+            self.assertEqual(0.0, mapfile.s23)
+            self.assertEqual(0.0, mapfile.s31)
+            self.assertEqual(0.0, mapfile.s32)
+            self.assertEqual(0.0, mapfile.s33)
+            self.assertEqual((0,) * 15, mapfile.extra)
+            self.assertEqual(b'MAP ', mapfile.map)
+            self.assertEqual(bytes([68, 68, 0, 0]), mapfile.machst)
+            self.assertEqual(0, mapfile.nlabl)
+            self.assertEqual(30, mapfile.cols)
+            self.assertEqual(20, mapfile.rows)
+            self.assertEqual(10, mapfile.sections)
+            self.assertEqual("Orientation(cols='X', rows='Y', sections='Z')", str(mapfile.orientation))
+            self.assertEqual((1.0, 1.0, 1.0), mapfile.voxel_size)
 
         # read and modify
-        with models.MapFile(self.test_fn, file_mode='r+') as mapf2:
-            self.assertEqual(30, mapf2.nc)
-            self.assertEqual(20, mapf2.nr)
-            self.assertEqual(10, mapf2.ns)
-            self.assertEqual(1, mapf2.mapc)
-            self.assertEqual(2, mapf2.mapr)
-            self.assertEqual(3, mapf2.maps)
+        with models.MapFile(self.test_fn, file_mode='r+') as mapfile2:
+            self.assertEqual(30, mapfile2.nc)
+            self.assertEqual(20, mapfile2.nr)
+            self.assertEqual(10, mapfile2.ns)
+            self.assertEqual(1, mapfile2.mapc)
+            self.assertEqual(2, mapfile2.mapr)
+            self.assertEqual(3, mapfile2.maps)
             # change the orientation
-            mapf2.orientation = models.Orientation(cols='Z', rows='Y', sections='X')
-            self.assertEqual(10, mapf2.nc)
-            self.assertEqual(20, mapf2.nr)
-            self.assertEqual(30, mapf2.ns)
-            self.assertEqual(3, mapf2.mapc)
-            self.assertEqual(2, mapf2.mapr)
-            self.assertEqual(1, mapf2.maps)
-            print(mapf2)
+            mapfile2.orientation = models.Orientation(cols='Z', rows='Y', sections='X')
+            self.assertEqual(10, mapfile2.nc)
+            self.assertEqual(20, mapfile2.nr)
+            self.assertEqual(30, mapfile2.ns)
+            self.assertEqual(3, mapfile2.mapc)
+            self.assertEqual(2, mapfile2.mapr)
+            self.assertEqual(1, mapfile2.maps)
+            print(mapfile2)
 
     def test_voxel_size(self):
         """"""
         # we start off with a standard orientation but anisotropic
         # then we change to nonstandard
         # examine the voxel size
-        with models.MapFile(self.test_fn, file_mode='w') as mapf:
-            mapf.data = numpy.random.rand(3, 4, 5)
+        with models.MapFile(self.test_fn, file_mode='w') as mapfile:
+            mapfile.data = numpy.random.rand(3, 4, 5)
             # x=1.7, y=2.4, z=9.3
             # X=8.5, Y=9.6, Z=27.9
-            mapf.voxel_size = 1.7, 2.4, 9.3
-            self.assertEqual(8.5, mapf.x_length)
-            self.assertEqual(9.6, mapf.y_length)
-            self.assertAlmostEqual(27.9, mapf.z_length)
+            mapfile.voxel_size = 1.7, 2.4, 9.3
+            self.assertEqual(8.5, mapfile.x_length)
+            self.assertEqual(9.6, mapfile.y_length)
+            self.assertAlmostEqual(27.9, mapfile.z_length)
             # what if we change the orientation to ZYX
-            mapf.orientation = models.Orientation(cols='Z', rows='Y', sections='X')
+            mapfile.orientation = models.Orientation(cols='Z', rows='Y', sections='X')
             # the voxel sizes also get permuted
-            self.assertEqual((9.3, 2.4, 1.7), mapf.voxel_size)
+            self.assertEqual((9.3, 2.4, 1.7), mapfile.voxel_size)
             # but the lengths should change because we now have a different number of voxels on the same length
-            self.assertAlmostEqual(27.9, mapf.x_length)
-            self.assertEqual(9.6, mapf.y_length)
-            self.assertAlmostEqual(8.5, mapf.z_length)
-            voxel_size_orig = mapf.voxel_size
+            self.assertAlmostEqual(27.9, mapfile.x_length)
+            self.assertEqual(9.6, mapfile.y_length)
+            self.assertAlmostEqual(8.5, mapfile.z_length)
+            voxel_size_orig = mapfile.voxel_size
 
         # read
-        with models.MapFile(self.test_fn, 'r+') as mapf2:
-            self.assertAlmostEqual(voxel_size_orig[0], mapf2.voxel_size[0], places=6)
-            self.assertAlmostEqual(voxel_size_orig[1], mapf2.voxel_size[1], places=6)
-            self.assertAlmostEqual(voxel_size_orig[2], mapf2.voxel_size[2], places=6)
+        with models.MapFile(self.test_fn, 'r+') as mapfile2:
+            self.assertAlmostEqual(voxel_size_orig[0], mapfile2.voxel_size[0], places=6)
+            self.assertAlmostEqual(voxel_size_orig[1], mapfile2.voxel_size[1], places=6)
+            self.assertAlmostEqual(voxel_size_orig[2], mapfile2.voxel_size[2], places=6)
 
     def test_create_anisotropic_voxels(self):
         # create with anisotropic voxel sizes
-        with models.MapFile(self.test_fn, 'w', voxel_size=(3.7, 2.6, 1.5)) as mapf:
-            mapf.data = numpy.random.rand(12, 22, 17)
-            self.assertEqual((3.7, 2.6, 1.5), mapf.voxel_size)
+        with models.MapFile(self.test_fn, 'w', voxel_size=(3.7, 2.6, 1.5)) as mapfile:
+            mapfile.data = numpy.random.rand(12, 22, 17)
+            self.assertEqual((3.7, 2.6, 1.5), mapfile.voxel_size)
 
     def test_create_with_nonstardard_and_anisotropic(self):
         """"""
@@ -729,10 +752,10 @@ class TestMapFile(unittest.TestCase):
                 self.test_fn, 'w',
                 orientation=models.Orientation(cols='Y', rows='Z', sections='X'),
                 voxel_size=(3.7, 2.6, 1.5)
-        ) as mapf:
-            mapf.data = numpy.random.rand(12, 22, 17)
-            self.assertEqual((2, 3, 1), mapf.orientation.to_integers())
-            self.assertEqual((2.6, 1.5, 3.7), mapf.voxel_size)
+        ) as mapfile:
+            mapfile.data = numpy.random.rand(12, 22, 17)
+            self.assertEqual((2, 3, 1), mapfile.orientation.to_integers())
+            self.assertEqual((2.6, 1.5, 3.7), mapfile.voxel_size)
 
     def test_create_with_map_mode(self):
         """"""
@@ -742,9 +765,9 @@ class TestMapFile(unittest.TestCase):
                 map_mode=0,
                 voxel_size=(8.7, 9.2, 1.2),
                 orientation=models.Orientation.from_integers((2, 3, 1))
-        ) as mapf:
-            mapf.data = numpy.random.randint(0, 1, size=(11, 9, 16))
-            self.assertEqual(0, mapf.mode)
+        ) as mapfile:
+            mapfile.data = numpy.random.randint(0, 1, size=(11, 9, 16))
+            self.assertEqual(0, mapfile.mode)
 
     def test_change_map_mode_int(self):
         """"""
@@ -752,23 +775,23 @@ class TestMapFile(unittest.TestCase):
         # float to float valid: 2, 12
         # complex to complex: 3, 4
         # int to/from float invalid
-        with models.MapFile(self.test_fn, 'w', map_mode=0) as mapf:
-            mapf.data = numpy.random.randint(0, 1, (5, 5, 5))
-            self.assertEqual(1, mapf.data.itemsize)
-            mapf.mode = 1
-            self.assertEqual(2, mapf.data.itemsize)
-            mapf.mode = 3
-            self.assertEqual(4, mapf.data.itemsize)
+        with models.MapFile(self.test_fn, 'w', map_mode=0) as mapfile:
+            mapfile.data = numpy.random.randint(0, 1, (5, 5, 5))
+            self.assertEqual(1, mapfile.data.itemsize)
+            mapfile.mode = 1
+            self.assertEqual(2, mapfile.data.itemsize)
+            mapfile.mode = 3
+            self.assertEqual(4, mapfile.data.itemsize)
             # change back
-            mapf.mode = 0
-            self.assertEqual(1, mapf.data.itemsize)
-            mapf.mode = 1
-            self.assertEqual(2, mapf.data.itemsize)
+            mapfile.mode = 0
+            self.assertEqual(1, mapfile.data.itemsize)
+            mapfile.mode = 1
+            self.assertEqual(2, mapfile.data.itemsize)
 
         with self.assertWarns(UserWarning):
-            with models.MapFile(self.test_fn, 'r+') as mapf2:
-                mapf2.mode = 2
-                self.assertEqual(4, mapf2.data.itemsize)
+            with models.MapFile(self.test_fn, 'r+') as mapfile2:
+                mapfile2.mode = 2
+                self.assertEqual(4, mapfile2.data.itemsize)
 
         with self.assertWarns(UserWarning):
             with models.MapFile(self.test_fn, 'r+') as mapf3:
@@ -777,30 +800,54 @@ class TestMapFile(unittest.TestCase):
 
     def test_change_map_mode_float(self):
         """"""
-        with models.MapFile(self.test_fn, 'w') as mapf:
-            mapf.data = numpy.random.rand(8, 8, 8)
-            self.assertEqual(4, mapf.data.itemsize)
-            mapf.mode = 12
-            self.assertEqual(2, mapf.data.itemsize)
+        with models.MapFile(self.test_fn, 'w') as mapfile:
+            mapfile.data = numpy.random.rand(8, 8, 8)
+            self.assertEqual(4, mapfile.data.itemsize)
+            mapfile.mode = 12
+            self.assertEqual(2, mapfile.data.itemsize)
 
         with self.assertWarns(UserWarning):
-            with models.MapFile(self.test_fn, 'r+') as mapf2:
-                mapf2.mode = 0
-                self.assertEqual(1, mapf2.data.itemsize)
+            with models.MapFile(self.test_fn, 'r+') as mapfile2:
+                mapfile2.mode = 0
+                self.assertEqual(1, mapfile2.data.itemsize)
+
+    def test_change_map_mode_valid_data(self):
+        """"""
+        # start with map_mode = 2
+        with models.MapFile(
+                self.test_fn, 'w',
+                start=(-5, -5, -5),
+                voxel_size=(1.9, 2.6, 4.2),
+                colour=True,
+                orientation=models.Orientation.from_string('YZX')
+        ) as mapfile:
+            mapfile.data = numpy.random.rand(10, 10, 10)
+            print(mapfile)
+            # change to map_mode = 0
+            mapfile.mode = 0
+            print(mapfile)
+        # change to map_mode = 1
+        with models.MapFile(self.test_fn, 'r+', colour=True) as mapfile2:
+            mapfile2.mode = 1
+            print(mapfile2)
+        # change to map_mode = 2 again, but obviously we've lost the data
+        with models.MapFile(self.test_fn, 'r+', colour=True) as mapfile3:
+            mapfile3.mode = 2
+            print(mapfile3)
 
     def test_start(self):
         """"""
-        with models.MapFile(self.test_fn, 'w', start=(3, 9, -11)) as mapf:
-            mapf.data = numpy.random.rand(3, 5, 2)
-            print(mapf)
-            self.assertEqual((3, 9, -11), mapf.start)
+        with models.MapFile(self.test_fn, 'w', start=(3, 9, -11)) as mapfile:
+            mapfile.data = numpy.random.rand(3, 5, 2)
+            print(mapfile)
+            self.assertEqual((3, 9, -11), mapfile.start)
             # change start
-            mapf.start = (58, 3, 4)
-            print(mapf)
-            self.assertEqual((58, 3, 4), mapf.start)
+            mapfile.start = (58, 3, 4)
+            print(mapfile)
+            self.assertEqual((58, 3, 4), mapfile.start)
         # read
-        with models.MapFile(self.test_fn) as mapf2:
-            self.assertEqual((58, 3, 4), mapf2.start)
+        with models.MapFile(self.test_fn) as mapfile2:
+            self.assertEqual((58, 3, 4), mapfile2.start)
 
 
 class TestUtils(unittest.TestCase):
@@ -811,9 +858,9 @@ class TestUtils(unittest.TestCase):
         cls.random_name = TEST_DATA_DIR / f"file-{secrets.token_urlsafe(3)}.map"
         # random size
         cls.cols, cls.rows, cls.sections = random.sample(range(10, 30), k=3)
-        with models.MapFile(cls.random_name, 'w') as mapf:
-            mapf.data = utils.get_vol(cls.cols, cls.rows, cls.sections)
-            # mapf.data = voxel_size = 1.5
+        with models.MapFile(cls.random_name, 'w') as mapfile:
+            mapfile.data = utils.get_vol(cls.cols, cls.rows, cls.sections)
+            # mapfile.data = voxel_size = 1.5
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -826,8 +873,8 @@ class TestUtils(unittest.TestCase):
     def test_get_orientation(self):
         """"""
         # by default, orientation is XYZ
-        with models.MapFile(self.random_name) as mapf:
-            self.assertIsInstance(mapf.orientation, models.Orientation)
-            self.assertEqual('X', mapf.orientation.cols)
-            self.assertEqual('Y', mapf.orientation.rows)
-            self.assertEqual('Z', mapf.orientation.sections)
+        with models.MapFile(self.random_name) as mapfile:
+            self.assertIsInstance(mapfile.orientation, models.Orientation)
+            self.assertEqual('X', mapfile.orientation.cols)
+            self.assertEqual('Y', mapfile.orientation.rows)
+            self.assertEqual('Z', mapfile.orientation.sections)

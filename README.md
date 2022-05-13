@@ -10,8 +10,6 @@ correspondingly specify the X, Y and Z axes. Word 1 specifies the axis associate
 word 3 with sections. By default, an MRC file has the values 1, 2, 3 meaning that columns are aligned along the X axis,
 rows along the Y axis and sections along the Z axis in a right-hand oriented space.
 
-~~The best way to apply the ideas in this package will be into `mrcfile` Python package in a simple and clear way. However, `mrcfile` design is ad hoc and may require a bit more effort than developing this package.~~ 
-
 It would be desirable to make it easy for users to be able to:
 
 - determine the current space orientation;
@@ -45,7 +43,7 @@ with maptools.MapFile('file.map') as mapfile:
 ## Change the space orientation using a simple interface
 
 ```python
-with maptools.MapFile('file.map', mode='r+') as mapfile:
+with maptools.MapFile('file.map', file_mode='r+') as mapfile:
     print(mapfile.orientation)  # (cols='X', rows='Y', sections='Z')
     mapfile.orientation = mapfile.Orientation(cols='Z', rows='Y', sections='X')
     print(mapfile.orientation)  # (cols='Z', rows='Y', sections='X')
@@ -54,7 +52,7 @@ with maptools.MapFile('file.map', mode='r+') as mapfile:
 ## Create a file using the specified space orientation
 
 ```python
-with maptools.MapFile('file.map', mode='w') as mapfile:
+with maptools.MapFile('file.map', file_mode='w') as mapfile:
     # set the data
     mapfile.data = numpy.empty(shape=(10, 20, 30), dtype=numpy.uint8)
     mapfile.orientation = mapfile.Orientation(cols='Y', rows='X', sections='Z')

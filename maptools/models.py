@@ -303,7 +303,6 @@ class MapFile:
             verbose=False
     ):
         """"""
-        # todo: validate file modes in ['r', 'r+' and 'w']
         self.name = name
         self.file_mode = file_mode
         self._labels = list()
@@ -603,7 +602,6 @@ class MapFile:
         self.handle.write(struct.pack('<f', self.rms))
         self.handle.write(struct.pack('<i', self.nlabl))
         # write the remaining blanks
-        # fixme: allow records to be added
         if self.labels:
             for label in self.labels:
                 self.handle.write(struct.pack(f'<80s', label.encode('utf-8')))

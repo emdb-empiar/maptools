@@ -6,8 +6,9 @@ import itertools
 import shlex
 import sys
 
+from styled import Styled
+
 # options
-import time
 
 file = {
     'args': ['file'],
@@ -24,7 +25,7 @@ orientation = {
     )
 }
 voxel_sizes = {
-    'args': ['--voxel-sizes'],
+    'args': ['-V', '--voxel-sizes'],
     'kwargs': dict(
         nargs=3,
         type=float,
@@ -46,7 +47,7 @@ FLOAT_MAP_MODES = [2, 12]
 COMPLEX_MAP_MODES = [4]
 MAP_MODES = INT_MAP_MODES + FLOAT_MAP_MODES + COMPLEX_MAP_MODES
 map_mode = {
-    'args': ['--map-mode'],
+    'args': ['-M', '--map-mode'],
     'kwargs': dict(
         type=int,
         choices=MAP_MODES,
@@ -64,7 +65,7 @@ file_mode = {
 }
 
 start = {
-    'args': ['--start'],
+    'args': ['-S', '--start'],
     'kwargs': dict(
         default=[0, 0, 0],
         nargs=3,
@@ -143,21 +144,12 @@ _add_arg(create_parser, voxel_sizes)
 _add_arg(create_parser, size)
 _add_arg(create_parser, file_mode, default='w')
 _add_arg(create_parser, map_mode)
-data_mutex_group = create_parser.add_mutually_exclusive_group(required=False)
-data_mutex_group.add_argument(
-    '--zeros', action='store_true', default=True, help="EMDB MAP with zeros"
-)
-data_mutex_group.add_argument(
-    '--ones', action='store_true', help="EMDB MAP with ones"
-)
-data_mutex_group.add_argument(
-    '--empty', action='store_true', help="EMDB MAP which is empty"
-)
-data_mutex_group.add_argument(
-    '--random-integers', action='store_true', help="EMDB MAP with integers"
-)
-data_mutex_group.add_argument(
-    '--random-floats', action='store_true', help="EMDB MAP with random floats"
+VOXEL_VALUES = ['zeros', 'ones', 'empty', 'randint', 'random']
+create_parser.add_argument(
+    "--voxel-values",
+    default="zeros",
+    choices=VOXEL_VALUES,
+    help="the values to initialise the voxels to [default: zeros]"
 )
 create_parser.add_argument(
     '--min', default=0, type=int, help="minimum integer [default: 0]"
@@ -175,6 +167,17 @@ def parse_args():
     if args.command is None:
         parser.print_help()
         return args
+    # create
+    if args.command == 'create':
+        if args.orientation is None:
+            print(Styled(f"[[ '[error] required -O/--orientation flag missing'|fg-red ]]"), file=sys.stderr)
+            args.command = None
+        if args.map_mode is None:
+            print(Styled(f"[[ '[error] required -M/--map-mode flag missing'|fg-red ]]"), file=sys.stderr)
+            args.command = None
+        if args.voxel_sizes is None:
+            print(Styled(f"[[ '[error] required -V/--voxel-size flag missing'|fg-red ]]"), file=sys.stderr)
+            args.command = None
     return args
 
 

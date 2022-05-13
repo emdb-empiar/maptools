@@ -396,6 +396,7 @@ class MapFile:
     def copy(self, other: MapFile):
         """"""
         self._data = other._data
+        self._labels = other._labels
         self._prepare()
 
     def write(self):

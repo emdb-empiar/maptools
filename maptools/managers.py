@@ -1,10 +1,10 @@
 import os
+import sys
 
 import numpy
+from styled import Styled
 
 from maptools import models
-import sys
-from styled import Styled
 
 
 def view(args):
@@ -20,42 +20,30 @@ def view(args):
 
 
 def edit(args):
-    """"""
-    # todo: handle output file
-    """
-    if args.output is not None:
-        with models.mapfileile(args.output, 'w') as mapout:
-            with models.mapfileile(args.file) as mapin:
-                mapout.data = mapin.data
+    """Edit in place or to another file"""
+    if args.output is None:
+        file_mode = args.file_mode
     else:
-        with models.mapfileile(args.file, file_mode=args.file_mode) as mapfile:
-            if args.orientation is not None:
-                mapfile.orientation = models.Orientation.from_string(args.orientation)
-            if args.voxel_sizes is not None:
-                mapfile.voxel_size = args.voxel_sizes
-            if args.map_mode is not None:
-                mapfile.mode = args.map_mode
-    """
-    with models.MapFile(
-            args.file,
-            file_mode=args.file_mode,
-            start=args.start,
-            colour=args.colour,
-            verbose=args.verbose
-    ) as mapfile:
+        file_mode = 'w'
+    with models.MapFile(args.file, file_mode=file_mode) as mapin:
         if args.orientation is not None:
-            mapfile.orientation = models.Orientation.from_string(args.orientation)
+            mapin.orientation = models.Orientation.from_string(args.orientation)
         if args.voxel_sizes is not None:
-            mapfile.voxel_size = args.voxel_sizes
+            mapin.voxel_size = args.voxel_sizes
         if args.map_mode is not None:
-            mapfile.mode = args.map_mode
-        mapfile.add_label(args.label)
-        print(mapfile)
+            mapin.mode = args.map_mode
+        mapin.add_label(args.label)
+        if args.output is not None:
+            with models.MapFile(args.output, 'w') as mapout:
+                mapout.copy(mapin)
+                print(mapout)
+        else:
+            print(mapin)
     return os.EX_OK
 
 
 def create(args):
-    """"""
+    """Create a valid EMDB MAP file from scratch"""
     with models.MapFile(
             args.file,
             file_mode='w',

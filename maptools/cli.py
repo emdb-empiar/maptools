@@ -74,8 +74,8 @@ start = {
     )
 }
 
-outfile = {
-    'args': ['-o', '--outfile'],
+output = {
+    'args': ['-o', '--output'],
     'kwargs': dict(
         help="output file name"
     )
@@ -130,6 +130,7 @@ _add_arg(edit_parser, file_mode, default='r+')
 _add_arg(edit_parser, map_mode)
 _add_arg(edit_parser, start)
 _add_arg(edit_parser, label, default=f"{datetime.datetime.now().strftime('%d/%m/%y %H:%M')} - edited with maptools")
+_add_arg(edit_parser, output)
 
 # create
 create_parser = subparsers.add_parser(
@@ -178,6 +179,9 @@ def parse_args():
         if args.voxel_sizes is None:
             print(Styled(f"[[ '[error] required -V/--voxel-size flag missing'|fg-red ]]"), file=sys.stderr)
             args.command = None
+    elif args.command == 'edit':
+        if args.output is not None:
+            args.label = f"{datetime.datetime.now().strftime('%d/%m/%y %H:%M')} - copied from {args.file} with maptools"
     return args
 
 

@@ -319,7 +319,7 @@ class MapFile:
             self._mode = map_mode
             # start
             self._start = start
-        self.handle = None
+        self.handle = open(self.name, f'{self.file_mode}b')
         # create attributes
         for attr in self.__attrs__:
             if hasattr(self, attr):
@@ -330,7 +330,10 @@ class MapFile:
         self.verbose = verbose
 
     def __enter__(self):
-        self.handle = open(self.name, f'{self.file_mode}b')
+        self.read()
+        return self
+
+    def read(self):
         if self.file_mode in ['r', 'r+']:  # since we are reading we defer to what is present
             # source: ftp://ftp.ebi.ac.uk/pub/databases/emdb/doc/Map-format/current/EMDB_map_format.pdf
             # number of columns (fastest changing), rows, sections (slowest changing)
@@ -390,10 +393,12 @@ class MapFile:
                 numpy.array([self._nc, self._nr, self._ns]),
             ).tolist())
 
-        return self
+    def copy(self, other: MapFile):
+        """"""
+        self._data = other._data
+        self._prepare()
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Depending on the file mode, this method writes (or not) changes to disk"""
+    def write(self):
         if self.file_mode in ['r+', 'w']:
             try:
                 self._prepare()
@@ -404,6 +409,13 @@ class MapFile:
             self.handle.seek(0)
             self._write_header()
             self._write_data()
+
+    def close(self):
+        self.handle.close()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Depending on the file mode, this method writes (or not) changes to disk"""
+        self.write()
         self.handle.close()
 
     def __array__(self):
@@ -774,3 +786,16 @@ class MapFile:
                 for i, label in enumerate(self.labels):
                     string += f"\t{i}: {label}\n"
         return string
+
+    def __eq__(self, other: MapFile):
+        """"""
+        # not all attributes included; only critical ones
+        return (
+            self.cols == other.cols and self.rows == other.rows and self.sections == other.sections and \
+            self.mode == other.mode and self.start == other.start and self.nx == other.nx and self.ny == other.ny and\
+            self.nz == other.nz and self.alpha == other.alpha and self.beta == other.beta and \
+            self.gamma == other.gamma and self.mapc == other.mapc and self.mapr == other.mapr and \
+            self.maps == other.maps and self.ispg == other.ispg and self.nsymbt == other.nsymbt and \
+            self.lskflg == other.lskflg and numpy.array_equal(self._data, other._data)
+
+        )

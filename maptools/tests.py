@@ -71,8 +71,6 @@ class TestCLI(unittest.TestCase):
         self.assertFalse(args.colour)
 
 
-
-
 class TestManagers(unittest.TestCase):
     def setUp(self) -> None:
         self.test_fn = TEST_DATA_DIR / f"file-{secrets.token_urlsafe(3)}.map"
@@ -161,6 +159,7 @@ class TestManagers(unittest.TestCase):
         args = cli.cli(f"map create {self.test_fn} -O XYZ -M 12 -V 1 1 1 --voxel-values random")
         managers.create(args)
         managers.view(cli.cli(f"map view {self.test_fn} -c"))
+
 
 class TestExperiments(unittest.TestCase):
     @classmethod
@@ -538,6 +537,7 @@ class TestPermutationMatrix(unittest.TestCase):
 class TestMapFile(unittest.TestCase):
     def setUp(self) -> None:
         self.test_fn = TEST_DATA_DIR / f"test-{secrets.token_urlsafe(3)}.map"
+        self.test_fn2 = TEST_DATA_DIR / f"test-{secrets.token_urlsafe(3)}.map"
 
     def tearDown(self) -> None:
         try:
@@ -1047,6 +1047,17 @@ class TestMapFile(unittest.TestCase):
             self.assertEqual("a new label", mapfile2.get_label(0))
             self.assertEqual("ニシコクマルガラスは私のクォーツのスフィンクスが大好", mapfile2.get_label(1))
             print(mapfile2)
+
+    def test_copy(self):
+        """"""
+        mapfile1 = models.MapFile(self.test_fn, 'w')
+        mapfile1.data = numpy.random.rand(2, 3, 4)
+        # second one
+        mapfile2 = models.MapFile(self.test_fn2, 'w')
+        mapfile2.copy(mapfile1)
+        self.assertEqual(mapfile1, mapfile2)
+        mapfile1.close()
+        mapfile2.close()
 
 
 class TestUtils(unittest.TestCase):

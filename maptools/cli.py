@@ -3,13 +3,13 @@ from __future__ import annotations
 import argparse
 import datetime
 import itertools
+import pathlib
 import shlex
 import sys
 
 from styled import Styled
 
 # options
-
 file = {
     'args': ['file'],
     'kwargs': dict(
@@ -181,7 +181,7 @@ def parse_args():
             args.command = None
     elif args.command == 'edit':
         if args.output is not None:
-            args.label = f"{datetime.datetime.now().strftime('%d/%m/%y %H:%M')} - copied from {args.file} with maptools"
+            args.label = f"{datetime.datetime.now().strftime('%d/%m/%y %H:%M')} - copied from {pathlib.Path(args.file).name} with maptools"
     return args
 
 

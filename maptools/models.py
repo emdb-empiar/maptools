@@ -640,7 +640,6 @@ class MapFile:
     def get_label(self, label_id: int):
         """"""
         try:
-            # assert 0 <= label_id <= 9
             assert max(-10, -len(self._labels)) <= label_id <= min(len(self._labels) - 1, 9)
         except AssertionError:
             warnings.warn(

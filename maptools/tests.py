@@ -74,6 +74,7 @@ class TestCLI(unittest.TestCase):
 class TestManagers(unittest.TestCase):
     def setUp(self) -> None:
         self.test_fn = TEST_DATA_DIR / f"file-{secrets.token_urlsafe(3)}.map"
+        self.test_fn2 = TEST_DATA_DIR / f"file-{secrets.token_urlsafe(3)}.map"
         shape = random.choices(range(10, 50), k=3)
         with models.MapFile(self.test_fn, 'w') as mapfile:
             mapfile.data = numpy.random.rand(*shape)
@@ -81,6 +82,10 @@ class TestManagers(unittest.TestCase):
     def tearDown(self) -> None:
         try:
             os.remove(self.test_fn)
+        except FileNotFoundError:
+            pass
+        try:
+            os.remove(self.test_fn2)
         except FileNotFoundError:
             pass
 
@@ -130,6 +135,13 @@ class TestManagers(unittest.TestCase):
         managers.edit(args)
         with models.MapFile(self.test_fn, colour=True) as mapfile:
             self.assertRegex(mapfile.get_label(0), r".*edit.*")
+
+    def test_edit_with_outfile(self):
+        """"""
+        args = cli.cli(f"map edit {self.test_fn} -c -O zyx -o {self.test_fn2}")
+        managers.edit(args)
+        with models.MapFile(self.test_fn2, colour=True) as mapfile:
+            self.assertRegex(mapfile.get_label(0), r".*copied.*")
 
     def test_create(self):
         """"""
@@ -544,6 +556,10 @@ class TestMapFile(unittest.TestCase):
             os.remove(self.test_fn)
         except FileNotFoundError:
             print(f"test.map already deleted or not used in this test...", file=sys.stderr)
+        try:
+            os.remove(self.test_fn2)
+        except FileNotFoundError:
+            pass
 
     def test_create_empty(self):
         """"""

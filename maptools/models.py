@@ -1,9 +1,8 @@
-from __future__ import annotations
-
 import math
 import struct
 import unicodedata
 import warnings
+import typing
 
 import numpy
 from styled import Styled
@@ -84,10 +83,9 @@ class Orientation:
     def __repr__(self):
         return f"Orientation(cols='{self.cols}', rows='{self.rows}', sections='{self.sections}')"
 
-    def __truediv__(self, other: Orientation):
+    def __truediv__(self, other: typing.TypeVar('Orientation')):
         """Computes the permutation matrix required to convert this orientation to the specified orientation"""
         return PermutationMatrix.from_orientations(self, other)
-        # return PermutationMatrix(get_permutation_matrix(numpy.asarray(self), numpy.asarray(other)))
 
 
 class PermutationMatrix:
@@ -106,8 +104,8 @@ class PermutationMatrix:
         self._data.dtype = int
 
     @classmethod
-    def from_orientations(cls, orientation: [tuple | list | set | numpy.ndarray | Orientation],
-                          new_orientation: [tuple | list | set | numpy.ndarray | Orientation]):
+    def from_orientations(cls, orientation: typing.Union[tuple,  list,  set,  numpy.ndarray,  typing.TypeVar('Orientation')],
+                          new_orientation: typing.Union[tuple,  list,  set,  numpy.ndarray,  typing.TypeVar('Orientation')]):
         """Compute the permutation matrix required to convert the sequence <orientation> to <new_orientation>
 
         A permutation matrix is a square matrix.
@@ -206,7 +204,6 @@ class PermutationMatrix:
     def __rmatmul__(self, other):
         """RHS matrix multiplication"""
         # other must have as many cols as self has rows
-        print(f"{other = }")
         try:
             assert self.rows == other.shape[1]
         except AssertionError:
@@ -384,7 +381,7 @@ class MapFile:
             if self.handle.tell() < 1024:
                 self.handle.seek(1024)
             else:
-                warnings.warn(
+                warniπngs.warn(
                     f"Current byte position in file ({self.handle.tell()}) is past end of header (1024)",
                     UserWarning
                 )
@@ -401,7 +398,7 @@ class MapFile:
                 numpy.array([self._nc, self._nr, self._ns]),
             ).tolist())
 
-    def copy(self, other: MapFile):
+    def copy(self, other: typing.TypeVar('MapFile')):
         """"""
         self._data = other._data
         self._labels = other._labels
@@ -492,7 +489,7 @@ class MapFile:
         return self._voxel_size
 
     @voxel_size.setter
-    def voxel_size(self, vox_size: [tuple | list | set | numpy.ndarray]):
+    def voxel_size(self, vox_size: typing.Union[tuple,  list,  set,  numpy.ndarray]):
         if isinstance(vox_size, (int, float,)):
             x_size, y_size, z_size = (vox_size,) * 3
         elif isinstance(vox_size, (tuple, list, set)):
@@ -653,7 +650,7 @@ class MapFile:
             assert max(-10, -len(self._labels)) <= label_id <= min(len(self._labels) - 1, 9)
         except AssertionError:
             warnings.warn(
-                f"invalid label position {label_id = }; should be in range [{-len(self._labels)}, "
+                f"invalid label position {label_id}; should be in range [{-len(self._labels)}, "
                 f"{max(0, len(self._labels) - 1)}]",
                 UserWarning
             )
@@ -665,7 +662,7 @@ class MapFile:
         try:
             assert len(self._labels) < 10
         except AssertionError:
-            warnings.warn(f"labels full; {label = } will not be inserted", UserWarning)
+            warnings.warn(f"labels full; {label} will not be inserted", UserWarning)
             return
         # if this is a unicode sequence we have to check the length
         _label = label
@@ -676,7 +673,7 @@ class MapFile:
                 if len(_label.encode('utf-8')) <= 80:
                     break
                 _label = label[:i]
-            warnings.warn(f"{label = } exceeds 80 char limit and will be truncated to '{_label}'",
+            warnings.warn(f"{label} exceeds 80 char limit and will be truncated to '{_label}'",
                           UserWarning)
         self._labels.append(f"{_label[:80]:<80}")
         self.nlabl = len(self._labels)
@@ -686,7 +683,7 @@ class MapFile:
         try:
             assert len(self._labels) < 10
         except AssertionError:
-            warnings.warn(f"labels full; {label = } will not be inserted", UserWarning)
+            warnings.warn(f"labels full; {label} will not be inserted", UserWarning)
             return
         try:
             # non-negative indices: 0 to 9
@@ -696,7 +693,7 @@ class MapFile:
             assert max(-10, -len(self._labels)) <= position <= min(len(self._labels) - 1, 9)
         except AssertionError:
             warnings.warn(
-                f"invalid label position {label_id = }; should be in range [{-len(self._labels)}, "
+                f"invalid label position {label_id}; should be in range [{-len(self._labels)}, "
                 f"{max(0, len(self._labels) - 1)}]",
                 UserWarning
             )
@@ -714,7 +711,7 @@ class MapFile:
             assert max(-10, -len(self._labels)) <= label_id <= min(len(self._labels) - 1, 9)
         except AssertionError:
             warnings.warn(
-                f"invalid label position {label_id = }; should be in range [{-len(self._labels)}, {len(self._labels) - 1}",
+                f"invalid label position {label_id}; should be in range [{-len(self._labels)}, {len(self._labels) - 1}",
                 UserWarning
             )
             return
@@ -796,7 +793,7 @@ class MapFile:
                     string += f"\t{i}: {label}\n"
         return string
 
-    def __eq__(self, other: MapFile):
+    def __eq__(self, other: typing.TypeVar('MapFile')):
         """"""
         # not all attributes included; only critical ones
         return (

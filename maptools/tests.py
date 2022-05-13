@@ -123,7 +123,7 @@ class TestManagers(unittest.TestCase):
             data = struct.unpack('<10f', g.read(10 * 4))
             print(f"before: {data}")
         with open(self.test_fn, 'r+b') as h:
-            print(f"{h.tell() = }")
+            print(f"{h.tell()}")
             h.write(struct.pack('<5f', *(1.0,) * 5))
         with open(self.test_fn, 'rb') as g:
             data = struct.unpack('<10f', g.read(10 * 4))
@@ -548,7 +548,6 @@ class TestPermutationMatrix(unittest.TestCase):
     def test_swap_sequences(self):
         """Since the shape is ZYX, the swap axes should be 'inverted' i.e. if we are to swap X and Y instead of
         swapping 0 1 we swap 1 2"""
-        # fixme: I don't like this
         swap_sequences = models.PermutationMatrix.from_orientations((1, 2, 3), (1, 2, 3)).swap_sequences
         self.assertEqual([], swap_sequences)
         swap_sequences = models.PermutationMatrix.from_orientations((1, 2, 3), (1, 3, 2)).swap_sequences
@@ -724,13 +723,13 @@ class TestMapFile(unittest.TestCase):
         with models.MapFile(self.test_fn, file_mode='w') as mapfile:
             # set data
             mapfile.data = numpy.random.rand(10, 20, 30)  # sections, rows, cols
-            print(f"{mapfile.data.shape = }")
-            print(f"{mapfile.orientation = }")
+            print(f"{mapfile.data.shape}")
+            print(f"{mapfile.orientation}")
             print(f"{mapfile.cols, mapfile.rows, mapfile.sections}")
             # change orientation to nonstandar YXZ
             mapfile.orientation = models.Orientation(cols='Y', rows='X', sections='Z')
-            print(f"{mapfile.data.shape = }")
-            print(f"{mapfile.orientation = }")
+            print(f"{mapfile.data.shape}")
+            print(f"{mapfile.orientation}")
             print(f"{mapfile.cols, mapfile.rows, mapfile.sections}")
             # now the following should be automatically inferred from the data
             self.assertEqual(20, mapfile.nc)

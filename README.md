@@ -20,6 +20,7 @@ It would be desirable to make it easy for users to be able to:
 
 > ```python
 > import maptools
+> from maptools import models
 > ```
 
 ## Determine the current space orientation
@@ -37,7 +38,7 @@ with maptools.MapFile('file.map') as mapfile:
 ```python
 with maptools.MapFile('file.map', file_mode='r+') as mapfile:
     print(mapfile.orientation)  # (cols='X', rows='Y', sections='Z')
-    mapfile.orientation = mapfile.Orientation(cols='Z', rows='Y', sections='X')
+    mapfile.orientation = models.Orientation(cols='Z', rows='Y', sections='X')
     print(mapfile.orientation)  # (cols='Z', rows='Y', sections='X')
 ```
 
@@ -47,7 +48,7 @@ with maptools.MapFile('file.map', file_mode='r+') as mapfile:
 with maptools.MapFile('file.map', file_mode='w') as mapfile:
     # set the data
     mapfile.data = numpy.empty(shape=(10, 20, 30), dtype=numpy.uint8)
-    mapfile.orientation = mapfile.Orientation(cols='Y', rows='X', sections='Z')
+    mapfile.orientation = models.Orientation(cols='Y', rows='X', sections='Z')
     # will set nc,nr,ns=(10, 20, 30) and mapc,mapr,maps=(2, 1, 3)
     mapfile.voxel_size = 1.83 # isotropic
 ```

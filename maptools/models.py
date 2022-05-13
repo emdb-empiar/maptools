@@ -72,6 +72,10 @@ class Orientation:
     def to_integers(self):
         return _raxes[self.cols], _raxes[self.rows], _raxes[self.sections]
 
+    def to_transpose_integers(self):
+        """"""
+        return tuple((3 - numpy.asarray(self.to_integers())[::-1]).flatten().tolist())
+
     @property
     def shape(self):
         """Orientation is a row vector in 3-space"""
@@ -380,7 +384,11 @@ class MapFile:
             if self.handle.tell() < 1024:
                 self.handle.seek(1024)
             else:
-                raise ValueError(f"Current byte position in file ({self.handle.tell()}) is past end of header (1024)")
+                warnings.warn(
+                    f"Current byte position in file ({self.handle.tell()}) is past end of header (1024)",
+                    UserWarning
+                )
+                self.handle.seek(1024)
 
             # read the data
             dtype = self._mode_to_dtype()
@@ -523,6 +531,7 @@ class MapFile:
         swap_sequences = permutation_matrix.swap_sequences
         for swap_sequence in swap_sequences:
             self._data = numpy.swapaxes(self._data, *swap_sequence)
+        # self._data = numpy.transpose(self._data, orientation.to_transpose_integers())
         # matrix multiply to get the new shape
         # we have to reverse the shape to apply the permutation
         # reversed_current_shape = numpy.asarray(self).shape[::-1]
@@ -791,11 +800,11 @@ class MapFile:
         """"""
         # not all attributes included; only critical ones
         return (
-            self.cols == other.cols and self.rows == other.rows and self.sections == other.sections and \
-            self.mode == other.mode and self.start == other.start and self.nx == other.nx and self.ny == other.ny and\
-            self.nz == other.nz and self.alpha == other.alpha and self.beta == other.beta and \
-            self.gamma == other.gamma and self.mapc == other.mapc and self.mapr == other.mapr and \
-            self.maps == other.maps and self.ispg == other.ispg and self.nsymbt == other.nsymbt and \
-            self.lskflg == other.lskflg and numpy.array_equal(self._data, other._data)
+                self.cols == other.cols and self.rows == other.rows and self.sections == other.sections and \
+                self.mode == other.mode and self.start == other.start and self.nx == other.nx and self.ny == other.ny and \
+                self.nz == other.nz and self.alpha == other.alpha and self.beta == other.beta and \
+                self.gamma == other.gamma and self.mapc == other.mapc and self.mapr == other.mapr and \
+                self.maps == other.maps and self.ispg == other.ispg and self.nsymbt == other.nsymbt and \
+                self.lskflg == other.lskflg and numpy.array_equal(self._data, other._data)
 
         )

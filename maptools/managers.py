@@ -21,7 +21,7 @@ def view(args):
 
 def edit(args):
     """Edit in place or to another file"""
-    with models.MapFile(args.file, file_mode=args.file_mode) as mapin:
+    with models.MapFile(args.file, file_mode=args.file_mode, colour=args.colour, verbose=args.verbose) as mapin:
         if args.orientation is not None:
             mapin.orientation = models.Orientation.from_string(args.orientation)
         if args.voxel_sizes is not None:
@@ -29,7 +29,7 @@ def edit(args):
         if args.map_mode is not None:
             mapin.mode = args.map_mode
         if args.output is not None:
-            with models.MapFile(args.output, 'w') as mapout:
+            with models.MapFile(args.output, 'w', colour=args.colour, verbose=args.verbose) as mapout:
                 mapout.copy(mapin)
                 mapout.add_label(args.label)
                 print(mapout)

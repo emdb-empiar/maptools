@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import itertools
 import math
 import struct
 import unicodedata
@@ -36,8 +35,7 @@ class Orientation:
         except AssertionError:
             raise ValueError(f"cols, rows, sections must be one of {', '.join(_axes.values())}")
         # ensure values are unique
-        _full_axes_set = {'X', 'Y', 'Z'}  # fixme: might redundant
-        _axes_set = set([_cols, _rows, _sections])
+        _axes_set = {_cols, _rows, _sections}
         try:
             assert len(_axes_set) == 3
         except AssertionError:
@@ -54,7 +52,7 @@ class Orientation:
     def from_integers(cls, integers: tuple):
         """"""
         try:
-            set(integers).intersection({1, 2, 3}) == {1, 2, 3} and len(integers) == 3
+            assert set(integers).intersection({1, 2, 3}) == {1, 2, 3} and len(integers) == 3
         except AssertionError:
             raise ValueError(f"invalid integers {integers}: only use a 3-tuple with values from {{1, 2, 3}}")
         c, r, s = integers
@@ -64,7 +62,7 @@ class Orientation:
     def from_string(cls, orientation_string: str):
         """"""
         try:
-            set(orientation_string.upper()).intersection({'X', 'Y', 'Z'}) == {'X', 'Y', 'Z'} and len(
+            assert set(orientation_string.upper()).intersection({'X', 'Y', 'Z'}) == {'X', 'Y', 'Z'} and len(
                 orientation_string) == 3
         except AssertionError:
             raise ValueError(f"invalid orientation string {orientation_string}: only use a string with XYZ only")
@@ -250,8 +248,6 @@ class MapFile:
         '_amin', '_amax', '_amean', '_ispg', '_nsymbt', '_lskflg',
         '_s11', '_s12', '_s13', '_s21', '_s22', '_s23', '_s31', '_s32', '_s33',
         '_t1', '_t2', '_t3', '_extra', '_map', '_machst', '_rms', '_nlabl',
-        # '_label_0', '_label_1', '_label_2', '_label_3', '_label_4', '_label_5', '_label_6', '_label_7', '_label_8',
-        # '_label_9',
     ]
     # descriptors
     nc = MapFileAttribute('_nc')
@@ -310,6 +306,7 @@ class MapFile:
         # todo: validate file modes in ['r', 'r+' and 'w']
         self.name = name
         self.file_mode = file_mode
+        self._labels = list()
         self._data = None
         self._orientation = orientation
         if file_mode == 'w':
@@ -375,11 +372,8 @@ class MapFile:
             # orientation
             self._orientation = Orientation.from_integers((self._mapc, self._mapr, self._maps))
             # Up to 10 user-defined labels
-            for i in range(int(self._nlabl)):
-                setattr(
-                    self, f'_label_{i}',
-                    struct.unpack('<80s', self.handle.read(80))[0].decode('utf-8').rstrip(' ')
-                )
+            self._read_labels()
+
             # jump to the beginning of data
             if self.handle.tell() < 1024:
                 self.handle.seek(1024)
@@ -388,7 +382,8 @@ class MapFile:
 
             # read the data
             dtype = self._mode_to_dtype()
-            # todo: byteorder
+            # when changing byteorder using numpy use the following formula:
+            #   dtype=numpy.dtype(dtype).newbyteorder(<byteorder>)
             self._data = numpy.frombuffer(self.handle.read(), dtype=dtype).reshape(self.ns, self.nr, self.nc)
             # voxel size
             self._voxel_size = tuple(numpy.divide(
@@ -477,7 +472,7 @@ class MapFile:
         return self._voxel_size
 
     @voxel_size.setter
-    def voxel_size(self, vox_size):
+    def voxel_size(self, vox_size: [tuple | list | set | numpy.ndarray]):
         if isinstance(vox_size, (int, float,)):
             x_size, y_size, z_size = (vox_size,) * 3
         elif isinstance(vox_size, (tuple, list, set)):
@@ -488,10 +483,10 @@ class MapFile:
             x_size, y_size, z_size = vox_size
         elif isinstance(vox_size, numpy.ndarray):
             try:
-                assert vox_size.shape == (3,)
+                assert vox_size.shape == (3,) or vox_size.shape == (1, 3)
             except AssertionError:
                 raise TypeError(f"voxel size should be an array of shape (3, )")
-            x_size, y_size, z_size = vox_size
+            x_size, y_size, z_size = vox_size.flatten()
         self._voxel_size = x_size, y_size, z_size
         self._prepare()
 
@@ -528,10 +523,7 @@ class MapFile:
         # set the new orientation
         self._orientation = orientation
         # also permute the voxel sizes
-        # fixme: ugly
-        self.voxel_size = tuple(
-            (numpy.array(self.voxel_size).reshape(1, 3) @ permutation_matrix).tolist()[0]
-        )
+        self.voxel_size = numpy.array(self.voxel_size).reshape(1, 3) @ permutation_matrix
         # recalculate parameters
         self._prepare()
 
@@ -612,11 +604,108 @@ class MapFile:
         self.handle.write(struct.pack('<i', self.nlabl))
         # write the remaining blanks
         # fixme: allow records to be added
-        self.handle.write(struct.pack(f'<800x'))
+        if self.labels:
+            for label in self.labels:
+                self.handle.write(struct.pack(f'<80s', label.encode('utf-8')))
+            self.handle.write(struct.pack(f'<{80 * (10 - len(self.labels))}x'))
+        else:
+            self.handle.write(struct.pack(f'<800x'))
+
+    def _read_labels(self):
+        """"""
+        for i in range(int(self._nlabl)):
+            self._labels.append(
+                struct.unpack('<80s', self.handle.read(80))[0].decode('utf-8').rstrip(' ')
+            )
 
     def _write_data(self):
         self._data.tofile(self.handle)
         self.handle.truncate()
+
+    @property
+    def labels(self):
+        """"""
+        return self._labels
+
+    def get_label(self, label_id: int):
+        """"""
+        try:
+            # assert 0 <= label_id <= 9
+            assert max(-10, -len(self._labels)) <= label_id <= min(len(self._labels) - 1, 9)
+        except AssertionError:
+            warnings.warn(
+                f"invalid label position {label_id = }; should be in range [{-len(self._labels)}, "
+                f"{max(0, len(self._labels) - 1)}]",
+                UserWarning
+            )
+            return None
+        return self._labels[label_id].strip()
+
+    def add_label(self, label: str):
+        """"""
+        try:
+            assert len(self._labels) < 10
+        except AssertionError:
+            warnings.warn(f"labels full; {label = } will not be inserted", UserWarning)
+            return
+        # if this is a unicode sequence we have to check the length
+        _label = label
+        try:
+            assert len(label.encode('utf-8')) <= 80
+        except AssertionError:
+            for i in range(len(label), 0, -1):
+                if len(_label.encode('utf-8')) <= 80:
+                    break
+                _label = label[:i]
+            warnings.warn(f"{label = } exceeds 80 char limit and will be truncated to '{_label}'",
+                          UserWarning)
+        self._labels.append(f"{_label[:80]:<80}")
+        self.nlabl = len(self._labels)
+
+    def insert_label(self, label: str, position: int = -1):
+        """"""
+        try:
+            assert len(self._labels) < 10
+        except AssertionError:
+            warnings.warn(f"labels full; {label = } will not be inserted", UserWarning)
+            return
+        try:
+            # non-negative indices: 0 to 9
+            # negative indices: -10 to -1
+            # if length is k: 0 to k-1
+            # if length is k: -k to -1
+            assert max(-10, -len(self._labels)) <= position <= min(len(self._labels) - 1, 9)
+        except AssertionError:
+            warnings.warn(
+                f"invalid label position {label_id = }; should be in range [{-len(self._labels)}, "
+                f"{max(0, len(self._labels) - 1)}]",
+                UserWarning
+            )
+            return
+        self._labels.insert(position, label)
+        self.nlabl = len(self._labels)
+
+    def del_label(self, label_id: int = -1):
+        """"""
+        try:
+            # non-negative indices: 0 to 9
+            # negative indices: -10 to -1
+            # if length is k: 0 to k-1
+            # if length is k: -k to -1
+            assert max(-10, -len(self._labels)) <= label_id <= min(len(self._labels) - 1, 9)
+        except AssertionError:
+            warnings.warn(
+                f"invalid label position {label_id = }; should be in range [{-len(self._labels)}, {len(self._labels) - 1}",
+                UserWarning
+            )
+            return
+        del self._labels[label_id]
+        self.nlabl = len(self._labels)
+
+    def clear_labels(self):
+        """"""
+        self._labels = list()
+        self.nlabl = len(self._labels)
 
     def __str__(self):
         alpha = unicodedata.lookup('GREEK SMALL LETTER ALPHA')
@@ -649,6 +738,13 @@ class MapFile:
                 \r{bold_green('RMS:')}{self.rms}
                 \r{bold_yellow('Number of labels:')}{self.nlabl}\n"""
             string += str(Styled("[[ ''|yes-end ]]"))
+            if self.nlabl:
+                # labels
+                string += str(Styled("[[ ''|fg-cyan:no-end ]]"))
+                string += "Labels:\n"
+                for i, label in enumerate(self.labels):
+                    string += f"\t{i}: {label}\n"
+                string += str(Styled("[[ ''|yes-end]]"))
         else:
             plain = lambda t: f"{t:<40}"
             string = f"""\
@@ -672,8 +768,11 @@ class MapFile:
                 \r{plain('Map:')}{self.map}
                 \r{plain('Mach-stamp:')}{self.machst}
                 \r{plain('RMS:')}{self.rms}
-                \r{plain('Number of labels:')}{self.nlabl}"""
-        # labels
-        for i in range(self.nlabl):
-            string += f"Label {i}: {getattr(self, f'_label_{i}')}"
+                \r{plain('Number of labels:')}{self.nlabl}
+                \r"""
+            # labels
+            if self.nlabl:
+                string += "Labels:\n"
+                for i, label in enumerate(self.labels):
+                    string += f"\t{i}: {label}\n"
         return string

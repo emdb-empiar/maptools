@@ -20,6 +20,8 @@ class TestCLI(unittest.TestCase):
         args = cli.cli(f"map view file.map")
         self.assertEqual('view', args.command)
         self.assertEqual('file.map', args.file)
+        self.assertFalse(args.verbose)
+        self.assertFalse(args.colour)
 
     def test_edit(self):
         args = cli.cli(f"map edit file.map")
@@ -28,7 +30,10 @@ class TestCLI(unittest.TestCase):
         self.assertIsNone(args.orientation)
         self.assertIsNone(args.voxel_sizes)
         self.assertEqual('r+', args.file_mode)
+        self.assertEqual([0, 0, 0], args.start)
         self.assertIsNone(args.map_mode)
+        self.assertFalse(args.verbose)
+        self.assertFalse(args.colour)
 
     def test_create(self):
         args = cli.cli(f"map create file.map")
@@ -38,10 +43,13 @@ class TestCLI(unittest.TestCase):
         self.assertIsNone(args.voxel_sizes)
         self.assertEqual([10, 10, 10], args.size)
         self.assertEqual('w', args.file_mode)
+        self.assertEqual([0, 0, 0], args.start)
         self.assertIsNone(args.map_mode)
         self.assertEqual(0, args.min)
         self.assertEqual(10, args.max)
         self.assertTrue(args.zeros)
+        self.assertFalse(args.verbose)
+        self.assertFalse(args.colour)
 
 
 class TestManagers(unittest.TestCase):
@@ -96,6 +104,20 @@ class TestManagers(unittest.TestCase):
         with open(self.test_fn, 'rb') as g:
             data = struct.unpack('<10f', g.read(10 * 4))
             print(f"after: {data}")
+
+    def test_edit_with_label(self):
+        """"""
+        args = cli.cli(f"map edit {self.test_fn}")
+        managers.edit(args)
+        with models.MapFile(self.test_fn, colour=True) as mapfile:
+            self.assertRegex(mapfile.get_label(0), r".*edit.*")
+
+    def test_create(self):
+        """"""
+        args = cli.cli(f"map create {self.test_fn}")
+        managers.create(args)
+        with models.MapFile(self.test_fn, colour=True) as mapfile:
+            print(mapfile)
 
 
 class TestExperiments(unittest.TestCase):
@@ -252,7 +274,7 @@ class TestExperiments(unittest.TestCase):
         final_orientation = 2, 3, 1
         intermediate_permutation_matrix = models.PermutationMatrix.from_orientations(orientation,
                                                                                      intermediate_orientation)
-        intermediate_shape =    numpy.array(vol.shape) @ intermediate_permutation_matrix
+        intermediate_shape = numpy.array(vol.shape) @ intermediate_permutation_matrix
         intermediate_vol = vol.reshape(intermediate_shape)
         self.assertEqual((20, 10, 30), intermediate_vol.shape)
         final_permutation_matrix = models.PermutationMatrix.from_orientations(intermediate_orientation,
@@ -303,6 +325,8 @@ class TestOrientation(unittest.TestCase):
         self.assertEqual((1, 3), orientation.shape)
         self.assertEqual("Orientation(cols='X', rows='Y', sections='Z')", repr(orientation))
         self.assertEqual("Orientation(cols='X', rows='Y', sections='Z')", str(orientation))
+        self.assertIsInstance(numpy.asarray(orientation), numpy.ndarray)
+        self.assertEqual((1, 3), orientation.shape)
         # initialisation errors
         # must use x, y, z
         with self.assertRaises(ValueError):
@@ -354,6 +378,33 @@ class TestOrientation(unittest.TestCase):
         self.assertEqual(models.PermutationMatrix(numpy.array([[1, 0, 0], [0, 0, 1], [0, 1, 0]], dtype=int)),
                          permutation_matrix)
 
+    def test_from_integers(self):
+        """"""
+        orientation = models.Orientation.from_integers((2, 1, 3))
+        self.assertIsInstance(orientation, models.Orientation)
+        self.assertEqual('Y', orientation.cols)
+        self.assertEqual('X', orientation.rows)
+        self.assertEqual('Z', orientation.sections)
+
+        with self.assertRaises(ValueError):
+            models.Orientation.from_integers((1, 1, 3))
+
+    def test_from_string(self):
+        """"""
+        orientation = models.Orientation.from_string('XZY')
+        self.assertIsInstance(orientation, models.Orientation)
+        self.assertEqual('X', orientation.cols)
+        self.assertEqual('Z', orientation.rows)
+        self.assertEqual('Y', orientation.sections)
+
+        with self.assertRaises(ValueError):
+            models.Orientation.from_string('XXY')
+
+    def test_to_integers(self):
+        """"""
+        orientation = models.Orientation.from_string('XZY')
+        self.assertEqual((1, 3, 2), orientation.to_integers())
+
 
 class TestPermutationMatrix(unittest.TestCase):
     @classmethod
@@ -384,11 +435,28 @@ class TestPermutationMatrix(unittest.TestCase):
         self.assertEqual(3, permutation_matrix.cols)
         self.assertEqual(int, permutation_matrix.dtype)
         # invalid data
+        with self.assertRaises(ValueError):
+            models.PermutationMatrix(
+                numpy.fromstring('0 0 0 0 0 0 0 0 1', sep=' ').reshape(3, 3)
+            )
         # non-binary
         with self.assertRaises(ValueError):
             models.PermutationMatrix(
                 numpy.fromstring('1 0 0 0 2 0 0 0 1', sep=' ').reshape(3, 3)
             )
+
+    def test_permuation_matrix_from_orientations(self):
+        """"""
+        permutation_matrix = models.PermutationMatrix.from_orientations((1, 2, 3), (1, 3, 2))
+        self.assertIsInstance(permutation_matrix, models.PermutationMatrix)
+        self.assertEqual((3, 3), permutation_matrix.shape)
+        self.assertEqual(3, permutation_matrix.rows)
+        self.assertEqual(3, permutation_matrix.cols)
+        self.assertEqual(int, permutation_matrix.dtype)
+        self.assertTrue(numpy.array_equal(
+            numpy.fromstring('1 0 0 0 0 1 0 1 0', sep=' ', dtype=int).reshape(3, 3),
+            numpy.asarray(permutation_matrix)
+        ))
 
     def test_permutation_matrix_ops(self):
         """"""
@@ -408,7 +476,9 @@ class TestPermutationMatrix(unittest.TestCase):
         self.assertTrue(numpy.array_equal(numpy.eye(3, dtype=int), numpy.asarray(permutation_matrix1)))
 
     def test_swap_sequences(self):
-        """Since the shape is ZYX, the swap axes should be 'inverted' i.e. if we are to swap X and Y instead of swapping 0 1 we swap 1 2"""
+        """Since the shape is ZYX, the swap axes should be 'inverted' i.e. if we are to swap X and Y instead of
+        swapping 0 1 we swap 1 2"""
+        # fixme: I don't like this
         swap_sequences = models.PermutationMatrix.from_orientations((1, 2, 3), (1, 2, 3)).swap_sequences
         self.assertEqual([], swap_sequences)
         swap_sequences = models.PermutationMatrix.from_orientations((1, 2, 3), (1, 3, 2)).swap_sequences
@@ -867,6 +937,74 @@ class TestMapFile(unittest.TestCase):
         # read
         with models.MapFile(self.test_fn) as mapfile2:
             self.assertEqual((58, 3, 4), mapfile2.start)
+
+    def test_handle_labels(self):
+        """"""
+        with models.MapFile(TEST_DATA_DIR / 'emd_5625.map', colour=True) as mapfile:
+            self.assertTrue(len(mapfile.labels) == 1)
+            self.assertEqual("::::EMDATABANK.org::::EMD-5625::::", mapfile.get_label(0))
+            # add a new label
+            mapfile.add_label("there is a new dog in town")
+            self.assertEqual(2, len(mapfile.labels))
+            self.assertEqual(2, mapfile.nlabl)
+            # insert a label
+            mapfile.insert_label("are you coming for lunch?")
+            self.assertEqual(3, len(mapfile.labels))
+            mapfile.add_label("extra 1")
+            mapfile.add_label("extra 2")
+            mapfile.add_label("extra 3")
+            mapfile.add_label("extra 4")
+            mapfile.add_label("extra 5")
+            mapfile.add_label("extra 6")
+            mapfile.add_label("extra 7")
+            print(mapfile)
+            with self.assertWarns(UserWarning):
+                mapfile.add_label("extra 8")
+            self.assertEqual(10, len(mapfile.labels))
+            mapfile.del_label()
+            self.assertEqual(9, len(mapfile.labels))
+            mapfile.insert_label("this is where it ends", 4)
+            self.assertEqual(10, len(mapfile.labels))
+            with self.assertWarns(UserWarning):
+                mapfile.insert_label("another way to end", 7)
+
+            # invalid values
+            with self.assertWarns(UserWarning):
+                mapfile.get_label(-11)
+            with self.assertWarns(UserWarning):
+                mapfile.get_label(10)
+            with self.assertWarns(UserWarning):
+                mapfile.add_label(
+                    "I'm very sure that this is much longer than 80 characters because at some point I will cross "
+                    "the 80 char limit line, right?")
+            with self.assertWarns(UserWarning):
+                mapfile.insert_label("invalid label", 20)
+
+            # clear all labels
+            mapfile.clear_labels()
+            self.assertEqual(0, len(mapfile.labels))
+            print(mapfile)
+            self.assertEqual(0, mapfile.nlabl)
+
+            # unicode
+            with self.assertWarns(UserWarning):
+                mapfile.add_label("ニシコクマルガラスは私のクォーツのスフィンクスが大好きです")
+
+            print(mapfile)
+
+    def test_create_with_labels(self):
+        """"""
+        with models.MapFile(self.test_fn, 'w', colour=True) as mapfile:
+            mapfile.data = numpy.random.rand(5, 6, 7)
+            mapfile.add_label("a new label")
+            self.assertEqual("a new label", mapfile.get_label(0))
+            mapfile.add_label("ニシコクマルガラスは私のクォーツのスフィンクスが大好きです")
+
+        # read
+        with models.MapFile(self.test_fn, colour=True) as mapfile2:
+            self.assertEqual("a new label", mapfile2.get_label(0))
+            self.assertEqual("ニシコクマルガラスは私のクォーツのスフィンクスが大好", mapfile2.get_label(1))
+            print(mapfile2)
 
 
 class TestUtils(unittest.TestCase):

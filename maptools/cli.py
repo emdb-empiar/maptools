@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import datetime
 import itertools
 import shlex
 import sys
 
 # options
+import time
+
 file = {
     'args': ['file'],
     'kwargs': dict(
@@ -77,6 +80,13 @@ outfile = {
     )
 }
 
+label = {
+    'args': ['-l', '--label'],
+    'kwargs': dict(
+        help="label to insert; will be truncated at 80 chars"
+    )
+}
+
 parser = argparse.ArgumentParser(prog="map", description="Utilities to work with EMDB MAP files")
 
 
@@ -118,6 +128,7 @@ _add_arg(edit_parser, voxel_sizes)
 _add_arg(edit_parser, file_mode, default='r+')
 _add_arg(edit_parser, map_mode)
 _add_arg(edit_parser, start)
+_add_arg(edit_parser, label, default=f"{datetime.datetime.now().strftime('%d/%m/%y %H:%M')} - edited with maptools")
 
 # create
 create_parser = subparsers.add_parser(
@@ -155,6 +166,7 @@ create_parser.add_argument(
     '--max', default=10, type=int, help="minimum integer [default: 10]"
 )
 _add_arg(create_parser, start)
+_add_arg(create_parser, label, default=f"{datetime.datetime.now().strftime('%d/%m/%y %H:%M')} - created with maptools")
 
 
 def parse_args():

@@ -47,6 +47,7 @@ def edit(args):
             mapfile.voxel_size = args.voxel_sizes
         if args.map_mode is not None:
             mapfile.mode = args.map_mode
+        mapfile.add_label(args.label)
         print(mapfile)
     return os.EX_OK
 

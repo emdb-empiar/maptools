@@ -18,6 +18,50 @@ It would be desirable to make it easy for users to be able to:
 - create a file using the specified space orientation;
 - open a file using a specified space orientation;
 
+## Installation
+
+Install from source for now:
+
+```shell
+pip install git+https://github.com/paulkorir/maptools
+```
+
+## Using `maptools`
+### Interactive
+
+`maptools` currently has the following commands:
+
+```shell
+# create a map file from scratch
+map create file.map -O XYZ --voxel-size 1.2 1.2 1.2 --map-mode 2 --voxel-values random
+
+# view a map file
+map view file.map
+
+# view in colour (-c/--colour)
+map view file.map -c
+
+# edit into another file
+map edit file.map --output other.map
+
+# fix orientation
+map edit file.map --output other.map --orientation zyx -c
+ 
+# edit with a label
+map edit file.map --output other.map --voxel-size 3.2 3.2 3.2 --label "changed voxel size" -c
+
+# change mode (to save disk space); assume file has mode 2 (float32); we change it to 12 (float16)
+map edit file.map --output other.map --map-mode 12 --label "changed mode to 12" -c
+
+# change the start index
+map edit file.map --output other.map --start -10 -10 -10 --label "new start set to (-10, -10, -10)"
+
+# edit a file in place (destructive operation)
+map edit file.map
+```
+
+### Programmatic
+
 > ```python
 > import maptools
 > from maptools import models
@@ -54,30 +98,34 @@ with maptools.MapFile('file.map', file_mode='w') as mapfile:
 ```
 
 
-## Background
+[comment]: <> (## Background)
 
-This is where the complexity comes from.
+[comment]: <> (This is where the complexity comes from.)
 
-Orientation is a triple of integers: 1, 2, 3, where 1=X, 2=Y, 3=Z. Therefore, 1, 2, 3 is X, Y, Z orientation which is standard.
+[comment]: <> (Orientation is a triple of integers: 1, 2, 3, where 1=X, 2=Y, 3=Z. Therefore, 1, 2, 3 is X, Y, Z orientation which is standard.)
 
-Some files have non-standard orientations. Our goal is to transform the data so that it is presented in the standard orientation.
-This means that we have to decide on the transformation required to modify data with a particular orientation to the
-standard orientation. In general, we would like to be able to move from any orientation to any other.
+[comment]: <> (Some files have non-standard orientations. Our goal is to transform the data so that it is presented in the standard orientation.)
 
-The transformation will be accomplished using numpy.swapaxes(arra, <index1>, <index2>)
+[comment]: <> (This means that we have to decide on the transformation required to modify data with a particular orientation to the)
 
-For 3D data the values of <index?> are exclusively one of: 0, 1, 2
+[comment]: <> (standard orientation. In general, we would like to be able to move from any orientation to any other.)
 
-E.g. numpy.swapaxes(arr, 0, 2) means swap the first and third dimension etc.
+[comment]: <> (The transformation will be accomplished using numpy.swapaxes&#40;arra, <index1>, <index2>&#41;)
 
-We can outline the set of possible orientations. These are permutations of (1, 2, 3). There are six (6) such permutations.
+[comment]: <> (For 3D data the values of <index?> are exclusively one of: 0, 1, 2)
 
-For any permutation we can swap at one of two pairs of positions: (0, 1), (0, 2) and (1, 2).
+[comment]: <> (E.g. numpy.swapaxes&#40;arr, 0, 2&#41; means swap the first and third dimension etc.)
 
-This means that any orientation can be converted to three other orientations by only permuting two positions.
-The two remaining orientations require at least two permutations.
-The identity permutation transforms an orientation into itself.
+[comment]: <> (We can outline the set of possible orientations. These are permutations of &#40;1, 2, 3&#41;. There are six &#40;6&#41; such permutations.)
 
-We can graphically describe the set of permutations as a permutohedron. (see https://en.wikipedia.org/wiki/Permutohedron)
+[comment]: <> (For any permutation we can swap at one of two pairs of positions: &#40;0, 1&#41;, &#40;0, 2&#41; and &#40;1, 2&#41;.)
 
-Permutations may be expressed using a permutation matrix (see https://en.wikipedia.org/wiki/Permutation_matrix).
+[comment]: <> (This means that any orientation can be converted to three other orientations by only permuting two positions.)
+
+[comment]: <> (The two remaining orientations require at least two permutations.)
+
+[comment]: <> (The identity permutation transforms an orientation into itself.)
+
+[comment]: <> (We can graphically describe the set of permutations as a permutohedron. &#40;see https://en.wikipedia.org/wiki/Permutohedron&#41;)
+
+[comment]: <> (Permutations may be expressed using a permutation matrix &#40;see https://en.wikipedia.org/wiki/Permutation_matrix&#41;.)

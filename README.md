@@ -18,7 +18,6 @@ It would be desirable to make it easy for users to be able to:
 - create a file using the specified space orientation;
 - open a file using a specified space orientation;
 
-> :bulb: **Note**: All examples below assume that the `mrcfile` package has been imported using:
 > ```python
 > import maptools
 > ```

@@ -62,6 +62,7 @@ map edit file.map
 
 ### Programmatic
 
+> **Note**: Before running any code below make sure to import `maptools`:
 > ```python
 > import maptools
 > from maptools import models

@@ -32,13 +32,6 @@ with maptools.MapFile('file.map') as mapfile:
     print(mapfile.orientation.to_integers()) # (1, 2, 3)
 ```
 
-## Determine the current space handedness
-
-```python
-with maptools.MapFile('file.map') as mapfile:
-    print(mapfile.space_handedness)  # 'right' | 'left'
-```
-
 ## Change the space orientation using a simple interface
 
 ```python

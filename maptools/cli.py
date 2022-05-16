@@ -159,6 +159,21 @@ create_parser.add_argument(
 _add_arg(create_parser, start)
 _add_arg(create_parser, label, default=f"{datetime.datetime.now().strftime('%d/%m/%y %H:%M')} - created with maptools")
 
+# sample
+sample_parser = subparsers.add_parser(
+    'sample',
+    description='perform grid resampling of a MAP file',
+    help="grid resampling of EMDB MAP file",
+    parents=[parent_parser]
+)
+_add_arg(sample_parser, file)
+SAMPLE_FACTORS = [2, 4, 8, 16, 32]
+sample_parser.add_argument('--factor', type=int, default=2, choices=SAMPLE_FACTORS, help="sampling factor [default=2]")
+_add_arg(sample_parser, file_mode, default='r+')
+_add_arg(sample_parser, label,
+         default=f"{datetime.datetime.now().strftime('%d/%m/%y %H:%M')} - resampled with maptools")
+_add_arg(sample_parser, output)
+
 
 def parse_args():
     """Parse CLI args"""

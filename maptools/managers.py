@@ -67,3 +67,21 @@ def create(args):
         mapfile.add_label(args.label)
         print(mapfile)
     return os.EX_OK
+
+
+def sample(args):
+    """Sample the MAP grid by the specified factor"""
+    with models.MapFile(args.file, file_mode=args.file_mode, colour=args.colour, verbose=args.verbose) as mapin:
+        from maptools.engines import grid_resample
+        data = grid_resample(mapin.data, args.factor)
+        if args.output is not None:
+            with models.MapFile(args.output, 'w', colour=args.colour, verbose=args.verbose) as mapout:
+                mapout.copy(mapin)
+                mapout.data = data
+                mapout.add_label(args.label)
+                print(mapout)
+        else:
+            mapin.data = data
+            mapin.add_label(args.label)
+            print(mapin)
+    return os.EX_OK

@@ -8,7 +8,7 @@ import unittest
 
 import numpy
 
-from maptools import models, cli, managers, utils
+from maptools import models, cli, managers, utils, engines
 
 BASE_DIR = pathlib.Path(__file__).parent.parent
 TEST_DATA_DIR = BASE_DIR / 'test_data'
@@ -70,12 +70,20 @@ class TestCLI(unittest.TestCase):
         self.assertFalse(args.verbose)
         self.assertFalse(args.colour)
 
+    def test_sample(self):
+        """"""
+        args = cli.cli(f"map sample --factor 2 file.map")
+        self.assertEqual('sample', args.command)
+        self.assertEqual(2, args.factor)
+        self.assertEqual('file.map', args.file)
+
 
 class TestManagers(unittest.TestCase):
     def setUp(self) -> None:
         self.test_fn = TEST_DATA_DIR / f"file-{secrets.token_urlsafe(3)}.map"
         self.test_fn2 = TEST_DATA_DIR / f"file-{secrets.token_urlsafe(3)}.map"
-        shape = random.choices(range(10, 50), k=3)
+        shape = random.choices(range(12, 52, 4), k=3)
+        self.shape = shape
         with models.MapFile(self.test_fn, 'w') as mapfile:
             mapfile.data = numpy.random.rand(*shape)
 
@@ -170,7 +178,27 @@ class TestManagers(unittest.TestCase):
         """"""
         args = cli.cli(f"map create {self.test_fn} -O XYZ -M 12 -V 1 1 1 --voxel-values random")
         managers.create(args)
-        managers.view(cli.cli(f"map view {self.test_fn} -c"))
+        with models.MapFile(self.test_fn) as mapfile:
+            # how do we know it's random?
+            # densities: min, max, mean and rms should all be different
+            # the length of the set of these values should be 4
+            self.assertEqual(4, len({mapfile.amin, mapfile.amax, mapfile.amean, mapfile.rms}))
+
+    def test_resample(self):
+        """"""
+        args = cli.cli(f"map sample --factor=4 {self.test_fn}")
+        managers.sample(args)
+        c, r, s = self.shape
+        with models.MapFile(self.test_fn) as mapfile:
+            self.assertEqual((c // args.factor, r // args.factor, s // args.factor), mapfile.data.shape)
+
+
+class TestEngines(unittest.TestCase):
+    def test_grid_resample(self):
+        vol = utils.get_vol(10, 10, 10)
+        factor = 2
+        resampled_vol = engines.grid_resample(vol, factor)
+        self.assertEqual((5, 5, 5), resampled_vol.shape)
 
 
 class TestExperiments(unittest.TestCase):
@@ -359,7 +387,6 @@ class TestExperiments(unittest.TestCase):
         # self.assertEqual((1, 0, 2), orientation.from_integers((3, 1, 2)).to_transpose_integers())
         # self.assertEqual((1, 0, 2), orientation.from_integers((3, 1, 2)).to_transpose_integers())
         # self.assertEqual((1, 0, 2), orientation.from_integers((3, 1, 2)).to_transpose_integers())
-
 
 
 class TestOrientation(unittest.TestCase):

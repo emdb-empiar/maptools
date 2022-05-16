@@ -58,6 +58,9 @@ map edit file.map --output other.map --start -10 -10 -10 --label "new start set 
 
 # edit a file in place (destructive operation)
 map edit file.map
+
+# sample the grid by some factor
+map sample --factor 2 file.map --output other.map
 ```
 
 ### Programmatic

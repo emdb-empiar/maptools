@@ -73,7 +73,10 @@ class Orientation:
 
     def to_transpose_integers(self):
         """"""
-        return tuple((3 - numpy.asarray(self.to_integers())[::-1]).flatten().tolist())
+        integers = self.to_integers()
+        rev_integers = numpy.asarray(integers)[::-1]
+        three_complement_rev_integers = (3 - rev_integers)
+        return tuple(three_complement_rev_integers.flatten().tolist())
 
     @property
     def shape(self):
@@ -529,15 +532,6 @@ class MapFile:
         for swap_sequence in swap_sequences:
             self._data = numpy.swapaxes(self._data, *swap_sequence)
         # self._data = numpy.transpose(self._data, orientation.to_transpose_integers())
-        # matrix multiply to get the new shape
-        # we have to reverse the shape to apply the permutation
-        # reversed_current_shape = numpy.asarray(self).shape[::-1]
-        # get the reverse of the new shape
-        # reversed_new_shape = reversed_current_shape @ permutation_matrix
-        # reverse to get the actual shape to abe applied
-        # new_shape = reversed_new_shape[::-1]
-        # reshape the data
-        # self._data = numpy.asarray(self).reshape(new_shape)
         # set the new orientation
         self._orientation = orientation
         # also permute the voxel sizes

@@ -375,18 +375,25 @@ class TestExperiments(unittest.TestCase):
     def test_transpose(self):
         """"""
         vol = utils.get_vol(10, 20, 30)
-        print(vol.shape)
-        print(numpy.transpose(vol, (0, 1, 2)).shape)
-        print(numpy.transpose(vol, (1, 0, 2)).shape)
         orientation = models.Orientation.from_integers((3, 1, 2))
-        print(orientation)
-        print(numpy.asarray(orientation) - 1)
+        # 1, 2, 3
         self.assertEqual((0, 1, 2), orientation.from_integers((1, 2, 3)).to_transpose_integers())
+        self.assertEqual((10, 20, 30), vol.transpose(orientation.from_integers((1, 2, 3)).to_transpose_integers()).shape)
+        # 1, 3, 2
         self.assertEqual((1, 0, 2), orientation.from_integers((1, 3, 2)).to_transpose_integers())
-        # self.assertEqual((1, 0, 2), orientation.from_integers((3, 1, 2)).to_transpose_integers())
-        # self.assertEqual((1, 0, 2), orientation.from_integers((3, 1, 2)).to_transpose_integers())
-        # self.assertEqual((1, 0, 2), orientation.from_integers((3, 1, 2)).to_transpose_integers())
-        # self.assertEqual((1, 0, 2), orientation.from_integers((3, 1, 2)).to_transpose_integers())
+        self.assertEqual((20, 10, 30), vol.transpose(orientation.from_integers((1, 3, 2)).to_transpose_integers()).shape)
+        # 3, 1, 2
+        self.assertEqual((1, 2, 0), orientation.from_integers((3, 1, 2)).to_transpose_integers())
+        self.assertEqual((20, 30, 10), vol.transpose(orientation.from_integers((3, 1, 2)).to_transpose_integers()).shape)
+        # 3, 2, 1
+        self.assertEqual((2, 1, 0), orientation.from_integers((3, 2, 1)).to_transpose_integers())
+        self.assertEqual((30, 20, 10), vol.transpose(orientation.from_integers((3, 2, 1)).to_transpose_integers()).shape)
+        # 2, 1, 3
+        self.assertEqual((0, 2, 1), orientation.from_integers((2, 1, 3)).to_transpose_integers())
+        self.assertEqual((10, 30, 20), vol.transpose(orientation.from_integers((2, 1, 3)).to_transpose_integers()).shape)
+        # 2, 3, 1
+        self.assertEqual((2, 0, 1), orientation.from_integers((2, 3, 1)).to_transpose_integers())
+        self.assertEqual((30, 10, 20), vol.transpose(orientation.from_integers((2, 3, 1)).to_transpose_integers()).shape)
 
 
 class TestOrientation(unittest.TestCase):

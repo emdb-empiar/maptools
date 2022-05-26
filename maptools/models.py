@@ -107,8 +107,10 @@ class PermutationMatrix:
         self._data.dtype = int
 
     @classmethod
-    def from_orientations(cls, orientation: typing.Union[tuple,  list,  set,  numpy.ndarray,  typing.TypeVar('Orientation')],
-                          new_orientation: typing.Union[tuple,  list,  set,  numpy.ndarray,  typing.TypeVar('Orientation')]):
+    def from_orientations(cls,
+                          orientation: typing.Union[tuple, list, set, numpy.ndarray, typing.TypeVar('Orientation')],
+                          new_orientation: typing.Union[
+                              tuple, list, set, numpy.ndarray, typing.TypeVar('Orientation')]):
         """Compute the permutation matrix required to convert the sequence <orientation> to <new_orientation>
 
         A permutation matrix is a square matrix.
@@ -384,7 +386,7 @@ class MapFile:
             if self.handle.tell() < 1024:
                 self.handle.seek(1024)
             else:
-                warniπngs.warn(
+                warnings.warn(
                     f"Current byte position in file ({self.handle.tell()}) is past end of header (1024)",
                     UserWarning
                 )
@@ -492,7 +494,7 @@ class MapFile:
         return self._voxel_size
 
     @voxel_size.setter
-    def voxel_size(self, vox_size: typing.Union[tuple,  list,  set,  numpy.ndarray]):
+    def voxel_size(self, vox_size: typing.Union[tuple, list, set, numpy.ndarray]):
         if isinstance(vox_size, (int, float,)):
             x_size, y_size, z_size = (vox_size,) * 3
         elif isinstance(vox_size, (tuple, list, set)):

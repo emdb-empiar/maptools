@@ -745,8 +745,8 @@ class MapFile:
                 \r{bold_yellow('')}{self.s31} {self.s32} {self.s33}
                 \r{bold_green('Skew translation:')}({self.t1}, {self.t2}, {self.t3})
                 \r{bold_yellow('Extra:')}{self.extra}
-                \r{bold_green('Map:')}{self.map}
-                \r{bold_yellow('Mach-stamp:')}{self.machst}
+                \r{bold_green('Map:')}'{self.map.decode('utf-8')}'
+                \r{bold_yellow('Mach-stamp:')}'{self.machst.decode('utf-8')}'
                 \r{bold_green('RMS:')}{self.rms}
                 \r{bold_yellow('Number of labels:')}{self.nlabl}\n"""
             string += str(Styled("[[ ''|yes-end ]]"))
@@ -777,8 +777,8 @@ class MapFile:
                 \r{plain('')}{self.s31} {self.s32} {self.s33}
                 \r{plain('Skew translation:')}({self.t1}, {self.t2}, {self.t3})
                 \r{plain('Extra:')}{self.extra}
-                \r{plain('Map:')}{self.map}
-                \r{plain('Mach-stamp:')}{self.machst}
+                \r{plain('Map:')}'{self.map.decode('utf-8')}'
+                \r{plain('Mach-stamp:')}'{self.machst.decode('utf-8')}'
                 \r{plain('RMS:')}{self.rms}
                 \r{plain('Number of labels:')}{self.nlabl}
                 \r"""

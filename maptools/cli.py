@@ -97,8 +97,10 @@ def _add_arg(parser_: argparse.ArgumentParser, option: dict, **kwargs):
 
 
 parent_parser = argparse.ArgumentParser(add_help=False)
-parent_parser.add_argument('-v', '--verbose', default=False, action='store_true',
-                           help="verbose output to terminal in addition to log files [default: False]")
+output_mutex_parser = parent_parser.add_mutually_exclusive_group(required=False)
+output_mutex_parser.add_argument('-q', '--quiet', default=True, action='store_true', help="quiet output [default: True]")
+output_mutex_parser.add_argument('-v', '--verbose', action='store_true',
+                                 help="verbose output to terminal in addition to log files [default: False]")
 parent_parser.add_argument('-c', '--colour', default=False, action='store_true',
                            help="highlight with colours [default: False]")
 

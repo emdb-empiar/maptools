@@ -32,10 +32,12 @@ def edit(args):
             with models.MapFile(args.output, 'w', colour=args.colour, verbose=args.verbose) as mapout:
                 mapout.copy(mapin)
                 mapout.add_label(args.label)
+            if not args.quiet:
                 print(mapout)
         else:
             mapin.add_label(args.label)
-            print(mapin)
+            if not args.quiet:
+                print(mapin)
     return os.EX_OK
 
 
@@ -65,7 +67,8 @@ def create(args):
         elif args.voxel_values == 'random':
             mapfile.data = numpy.random.rand(*args.size[::-1])
         mapfile.add_label(args.label)
-        print(mapfile)
+        if not args.quiet:
+            print(mapfile)
     return os.EX_OK
 
 
@@ -79,9 +82,11 @@ def sample(args):
                 mapout.copy(mapin)
                 mapout.data = data
                 mapout.add_label(args.label)
-                print(mapout)
+                if not args.quiet:
+                    print(mapout)
         else:
             mapin.data = data
             mapin.add_label(args.label)
-            print(mapin)
+            if not args.quiet:
+                print(mapin)
     return os.EX_OK

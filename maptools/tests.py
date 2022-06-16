@@ -86,6 +86,7 @@ class TestManagers(unittest.TestCase):
         self.shape = shape
         with models.MapFile(self.test_fn, 'w') as mapfile:
             mapfile.data = numpy.random.rand(*shape)
+            mapfile.voxel_size = 3.78
 
     def tearDown(self) -> None:
         try:
@@ -105,8 +106,55 @@ class TestManagers(unittest.TestCase):
 
     def test_edit(self):
         """"""
-        args = cli.cli(f"map edit {self.test_fn}")
+        args = cli.cli(f"map edit {self.test_fn} -o {self.test_fn2}")
         managers.edit(args)
+        # no changes then both files should be exactly alike
+        with models.MapFile(self.test_fn, file_mode='r') as map1, models.MapFile(self.test_fn2, file_mode='r') as map2:
+            self.assertEqual(map1.nc, map2.nc)
+            self.assertEqual(map1.nr, map2.nr)
+            self.assertEqual(map1.ns, map2.ns)
+            self.assertEqual(map1.nx, map2.nx)
+            self.assertEqual(map1.ny, map2.ny)
+            self.assertEqual(map1.nz, map2.nz)
+            self.assertEqual(map1.x_length, map2.x_length)
+            self.assertEqual(map1.y_length, map2.y_length)
+            self.assertEqual(map1.z_length, map2.z_length)
+            self.assertEqual(map1.alpha, map2.alpha)
+            self.assertEqual(map1.beta, map2.beta)
+            self.assertEqual(map1.gamma, map2.gamma)
+            self.assertEqual(map1.mapc, map2.mapc)
+            self.assertEqual(map1.mapr, map2.mapr)
+            self.assertEqual(map1.maps, map2.maps)
+            self.assertEqual(map1.amin, map2.amin)
+            self.assertEqual(map1.amax, map2.amax)
+            self.assertEqual(map1.amean, map2.amean)
+            self.assertEqual(map1.ispg, map2.ispg)
+            self.assertEqual(map1.nsymbt, map2.nsymbt)
+            self.assertEqual(map1.lskflg, map2.lskflg)
+            self.assertEqual(map1.s11, map2.s11)
+            self.assertEqual(map1.s12, map2.s12)
+            self.assertEqual(map1.s13, map2.s13)
+            self.assertEqual(map1.s21, map2.s21)
+            self.assertEqual(map1.s22, map2.s22)
+            self.assertEqual(map1.s23, map2.s23)
+            self.assertEqual(map1.s31, map2.s31)
+            self.assertEqual(map1.s32, map2.s32)
+            self.assertEqual(map1.s33, map2.s33)
+            self.assertEqual(map1.t1, map2.t1)
+            self.assertEqual(map1.t2, map2.t2)
+            self.assertEqual(map1.t3, map2.t3)
+            self.assertEqual(map1.extra, map2.extra)
+            self.assertEqual(map1.map, map2.map)
+            self.assertEqual(map1.machst, map2.machst)
+            self.assertEqual(map1.rms, map2.rms)
+            self.assertNotEqual(map1.nlabl, map2.nlabl)
+            self.assertNotEqual(map1.name, map2.name)
+            self.assertTrue(numpy.array_equal(map1.data, map2.data))
+            self.assertEqual(map1.orientation, map2.orientation)
+            self.assertEqual(map1.mode, map2.mode)
+            self.assertEqual(map1.start, map2.start)
+            self.assertEqual(map1.voxel_size, map2.voxel_size)
+            self.assertNotEqual(map1.labels, map2.labels)
 
     def test_edit_change_orientation(self):
         """"""
@@ -117,11 +165,28 @@ class TestManagers(unittest.TestCase):
             self.assertEqual((2, 3, 1), mapfile.orientation.to_integers())
 
     def test_edit_change_mode(self):
-        """"""
-        args = cli.cli(f"map edit {self.test_fn} --map-mode=0 -v")
+        """Test that changing the mode:
+
+        - preserves the data
+        - preserves space information
+        """
+        # before the change
+        with models.MapFile(self.test_fn) as mapfile:
+            self.assertAlmostEqual(3.78, mapfile.voxel_size[0], places=6)
+            self.assertAlmostEqual(3.78, mapfile.voxel_size[1], places=6)
+            self.assertAlmostEqual(3.78, mapfile.voxel_size[2], places=6)
+        # edit
+        args = cli.cli(f"map edit {self.test_fn} --map-mode=1 -o {self.test_fn2}")
         managers.edit(args)
-        args = cli.cli(f"map edit {self.test_fn} --map-mode=1")
-        managers.edit(args)
+        # managers.view(cli.cli(f"map view --colour {self.test_fn}"))
+        # args = cli.cli(f"map edit {self.test_fn} --map-mode=1 -o {self.test_fn2}")
+        # managers.edit(args)
+        # after the change
+        with models.MapFile(self.test_fn2) as mapfile2:
+            self.assertAlmostEqual(3.78, mapfile2.voxel_size[0], places=6)
+            self.assertAlmostEqual(3.78, mapfile2.voxel_size[1], places=6)
+            self.assertAlmostEqual(3.78, mapfile2.voxel_size[2], places=6)
+        # managers.view(cli.cli(f"map view --colour {self.test_fn}"))
 
     def test_file_modes(self):
         """Demonstrate that modifying a file with r+b does not truncate file. Call file.truncate() to do so."""
@@ -378,22 +443,28 @@ class TestExperiments(unittest.TestCase):
         orientation = models.Orientation.from_integers((3, 1, 2))
         # 1, 2, 3
         self.assertEqual((0, 1, 2), orientation.from_integers((1, 2, 3)).to_transpose_integers())
-        self.assertEqual((10, 20, 30), vol.transpose(orientation.from_integers((1, 2, 3)).to_transpose_integers()).shape)
+        self.assertEqual((10, 20, 30),
+                         vol.transpose(orientation.from_integers((1, 2, 3)).to_transpose_integers()).shape)
         # 1, 3, 2
         self.assertEqual((1, 0, 2), orientation.from_integers((1, 3, 2)).to_transpose_integers())
-        self.assertEqual((20, 10, 30), vol.transpose(orientation.from_integers((1, 3, 2)).to_transpose_integers()).shape)
+        self.assertEqual((20, 10, 30),
+                         vol.transpose(orientation.from_integers((1, 3, 2)).to_transpose_integers()).shape)
         # 3, 1, 2
         self.assertEqual((1, 2, 0), orientation.from_integers((3, 1, 2)).to_transpose_integers())
-        self.assertEqual((20, 30, 10), vol.transpose(orientation.from_integers((3, 1, 2)).to_transpose_integers()).shape)
+        self.assertEqual((20, 30, 10),
+                         vol.transpose(orientation.from_integers((3, 1, 2)).to_transpose_integers()).shape)
         # 3, 2, 1
         self.assertEqual((2, 1, 0), orientation.from_integers((3, 2, 1)).to_transpose_integers())
-        self.assertEqual((30, 20, 10), vol.transpose(orientation.from_integers((3, 2, 1)).to_transpose_integers()).shape)
+        self.assertEqual((30, 20, 10),
+                         vol.transpose(orientation.from_integers((3, 2, 1)).to_transpose_integers()).shape)
         # 2, 1, 3
         self.assertEqual((0, 2, 1), orientation.from_integers((2, 1, 3)).to_transpose_integers())
-        self.assertEqual((10, 30, 20), vol.transpose(orientation.from_integers((2, 1, 3)).to_transpose_integers()).shape)
+        self.assertEqual((10, 30, 20),
+                         vol.transpose(orientation.from_integers((2, 1, 3)).to_transpose_integers()).shape)
         # 2, 3, 1
         self.assertEqual((2, 0, 1), orientation.from_integers((2, 3, 1)).to_transpose_integers())
-        self.assertEqual((30, 10, 20), vol.transpose(orientation.from_integers((2, 3, 1)).to_transpose_integers()).shape)
+        self.assertEqual((30, 10, 20),
+                         vol.transpose(orientation.from_integers((2, 3, 1)).to_transpose_integers()).shape)
 
 
 class TestOrientation(unittest.TestCase):

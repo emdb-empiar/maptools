@@ -90,6 +90,9 @@ class Orientation:
         """Computes the permutation matrix required to convert this orientation to the specified orientation"""
         return PermutationMatrix.from_orientations(self, other)
 
+    def __eq__(self, other: typing.TypeVar('Orientation')):
+        return self.cols == other.cols and self.rows == other.rows and self.sections == other.sections
+
 
 class PermutationMatrix:
     """A square matrix with exactly only one 1 in each row and zeros everywhere else"""
@@ -407,6 +410,7 @@ class MapFile:
         """"""
         self._data = other._data
         self._labels = other._labels
+        self.voxel_size = other.voxel_size
         self._prepare()
 
     def write(self):

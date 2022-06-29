@@ -23,7 +23,7 @@ It would be desirable to make it easy for users to be able to:
 Install from source for now:
 
 ```shell
-pip install git+https://github.com/paulkorir/maptools
+pip install git+https://github.com/emdb-empiar/maptools
 ```
 
 ## Using `maptools`

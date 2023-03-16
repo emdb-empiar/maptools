@@ -1,8 +1,8 @@
 import math
 import struct
+import typing
 import unicodedata
 import warnings
-import typing
 
 import numpy
 from styled import Styled
@@ -50,21 +50,16 @@ class Orientation:
     @classmethod
     def from_integers(cls, integers: tuple):
         """"""
-        try:
-            assert set(integers).intersection({1, 2, 3}) == {1, 2, 3} and len(integers) == 3
-        except AssertionError:
-            raise ValueError(f"invalid integers {integers}: only use a 3-tuple with values from {{1, 2, 3}}")
+        assert set(integers).intersection({1, 2, 3}) == {1, 2, 3} and len(
+            integers) == 3, f"invalid integers {integers}: only use a 3-tuple with values from {{1, 2, 3}}"
         c, r, s = integers
         return cls(cols=_axes[c], rows=_axes[r], sections=_axes[s])
 
     @classmethod
     def from_string(cls, orientation_string: str):
         """"""
-        try:
-            assert set(orientation_string.upper()).intersection({'X', 'Y', 'Z'}) == {'X', 'Y', 'Z'} and len(
-                orientation_string) == 3
-        except AssertionError:
-            raise ValueError(f"invalid orientation string {orientation_string}: only use a string with XYZ only")
+        assert set(orientation_string.upper()).intersection({'X', 'Y', 'Z'}) == {'X', 'Y', 'Z'} and len(
+            orientation_string) == 3, f"invalid orientation string {orientation_string}: only use a string with XYZ only"
         c, r, s = tuple(orientation_string)
         return cls(cols=c, rows=r, sections=s)
 
@@ -99,11 +94,8 @@ class PermutationMatrix:
 
     def __init__(self, data):
         # sanity check
-        try:
-            assert numpy.sum(data) == 3
-            assert numpy.count_nonzero(data) == 3
-        except AssertionError:
-            raise ValueError(f"non-binary values: {data}")
+        assert numpy.sum(data) == 3, f"non-binary values: {data}"
+        assert numpy.count_nonzero(data) == 3, f"non-binary values: {data}"
         self._data = data
         self.rows, self.cols = data.shape
         # dtype
@@ -122,10 +114,7 @@ class PermutationMatrix:
 
         # orientation can be a numpy array but it must be convertible to a 3-tuple
         def _convert_numpy_array_to_tuple(array):
-            try:
-                assert array.shape[0] == 1
-            except AssertionError:
-                raise ValueError(f"orientation array {array} has wrong shape; must be (1, n?) for any n")
+            assert array.shape[0] == 1, f"orientation array {array} has wrong shape; must be (1, n?) for any n"
             return tuple(array.flatten().tolist())
 
         if isinstance(orientation, numpy.ndarray):
@@ -146,20 +135,12 @@ class PermutationMatrix:
         else:
             raise TypeError(f"new_orientation must be a sequence type (tuple, list, set, or numpy.ndarray)")
         # assert that the values in orientation are unique
-        try:
-            assert len(set(_orientation)) == len(_orientation)
-        except AssertionError:
-            raise ValueError(f"repeated elements in {_orientation}")
+        assert len(set(_orientation)) == len(_orientation), f"repeated elements in {_orientation}"
         # assert that the values in new_orientation are unique
-        try:
-            assert len(set(_new_orientation)) == len(_new_orientation)
-        except AssertionError:
-            raise ValueError(f"repeated elements in {_new_orientation}")
+        assert len(set(_new_orientation)) == len(_new_orientation), f"repeated elements in {_new_orientation}"
         # assert that the values in orientation are exactly those in new_orientation
-        try:
-            assert len(set(_orientation)) == len(set(_new_orientation))
-        except AssertionError:
-            raise ValueError(f"values differ: {_orientation} vs. {_new_orientation}")
+        assert len(set(_orientation)) == len(
+            set(_new_orientation)), f"values differ: {_orientation} vs. {_new_orientation}"
         # compute the permutation matrix
         permutation_matrix = numpy.zeros((len(_orientation), len(_orientation)), dtype=int)
         for index, value in enumerate(_orientation):
@@ -195,27 +176,18 @@ class PermutationMatrix:
     def __matmul__(self, other):
         """LHS matrix multiplication"""
         # other must have as many rows as self has columns
-        try:
-            assert self.cols == other.shape[0]
-        except AssertionError:
-            raise ValueError(f"invalid shapes for LHS multiplication: ({self.shape} @ {other.shape})")
+        assert self.cols == other.shape[0], f"invalid shapes for LHS multiplication: ({self.shape} @ {other.shape})"
         return numpy.dot(numpy.asarray(self), numpy.array(other))
 
     def __imatmul__(self, other):
         """iterative RHS matrix multiplication"""
-        try:
-            assert self.cols == other.shape[0]
-        except AssertionError:
-            raise ValueError(f"invalid shapes for LHS multiplication: ({self.shape} @ {other.shape})")
+        assert self.cols == other.shape[0], f"invalid shapes for LHS multiplication: ({self.shape} @ {other.shape})"
         return numpy.dot(numpy.asarray(self), numpy.asarray(other))
 
     def __rmatmul__(self, other):
         """RHS matrix multiplication"""
         # other must have as many cols as self has rows
-        try:
-            assert self.rows == other.shape[1]
-        except AssertionError:
-            raise ValueError(f"invalid shapes for RHS multiplication: ({self.shape} @ {other.shape})")
+        assert self.rows == other.shape[1], f"invalid shapes for RHS multiplication: ({self.shape} @ {other.shape})"
         return numpy.dot(numpy.asarray(other), numpy.asarray(self))
 
     def __repr__(self):
@@ -384,13 +356,12 @@ class MapFile:
             self._orientation = Orientation.from_integers((self._mapc, self._mapr, self._maps))
             # Up to 10 user-defined labels
             self._read_labels()
-
             # jump to the beginning of data
-            if self.handle.tell() < 1024:
+            if self.handle.tell() <= 1024:
                 self.handle.seek(1024)
             else:
                 warnings.warn(
-                    f"Current byte position in file ({self.handle.tell()}) is past end of header (1024)",
+                    f"Current byte position in file ({self.handle.tell()}) is past end of header ({1024 + self._nsymbt})",
                     UserWarning
                 )
                 self.handle.seek(1024)
@@ -403,7 +374,7 @@ class MapFile:
             # voxel size
             self._voxel_size = tuple(numpy.divide(
                 numpy.array([self._x_length, self._y_length, self._z_length]),
-                numpy.array([self._nc, self._nr, self._ns]),
+                numpy.array([self._nx, self._ny, self._nz]),
             ).tolist())
 
     def copy(self, other: typing.TypeVar('MapFile')):
@@ -502,16 +473,10 @@ class MapFile:
         if isinstance(vox_size, (int, float,)):
             x_size, y_size, z_size = (vox_size,) * 3
         elif isinstance(vox_size, (tuple, list, set)):
-            try:
-                assert len(vox_size) == 3
-            except AssertionError:
-                raise TypeError(f"voxel size should be a number or 3-tuple: {vox_size}")
+            assert len(vox_size) == 3, f"voxel size should be a number or 3-tuple: {vox_size}"
             x_size, y_size, z_size = vox_size
         elif isinstance(vox_size, numpy.ndarray):
-            try:
-                assert vox_size.shape == (3,) or vox_size.shape == (1, 3)
-            except AssertionError:
-                raise TypeError(f"voxel size should be an array of shape (3, )")
+            assert vox_size.shape == (3,) or vox_size.shape == (1, 3), f"voxel size should be an array of shape (3, )"
             x_size, y_size, z_size = vox_size.flatten()
         self._voxel_size = x_size, y_size, z_size
         self._prepare()
@@ -527,19 +492,25 @@ class MapFile:
 
         We infer the permutation matrix by 'dividing' the current orientation by the specified orientation.
         This orientation will permute (C,R,S) to the desired arrangement. However, since the array shape is in the
-        order (S,R,C) we must first reverse the shape so as to permute the correct axes. After reversing,
+        order (S,R,C) we must first reverse the shape to permute the correct axes. After reversing,
         we permute then reverse the new shape before applying it to the data.
 
         :param orientation: the new orientation
         """
         # reorient the volume
         permutation_matrix = self.orientation / orientation
-        swap_sequences = permutation_matrix.swap_sequences
-        for swap_sequence in swap_sequences:
+        for swap_sequence in permutation_matrix.swap_sequences:
             self._data = numpy.swapaxes(self._data, *swap_sequence)
         # self._data = numpy.transpose(self._data, orientation.to_transpose_integers())
         # set the new orientation
         self._orientation = orientation
+        # also permute the start and intervals
+        self._start = numpy.array(self._start) @ permutation_matrix
+        # fixme: remove
+        if self._nx is not None and self._ny is not None and self._nz is not None:
+            self._nx, self._ny, self._nz = numpy.array([self._nx, self._ny, self._nz]) @ permutation_matrix
+        else:
+            self._nz, self._ny, self._nx = self._data.shape
         # also permute the voxel sizes
         self.voxel_size = numpy.array(self.voxel_size).reshape(1, 3) @ permutation_matrix
         # recalculate parameters
@@ -552,7 +523,13 @@ class MapFile:
             raise UserWarning("no data to write; set MapFile.data attribute to a numpy 3D array")
         # some attributes have default values and are excluded
         self._ns, self._nr, self._nc = self._data.shape
-        self._nz, self._ny, self._nx = self._data.shape
+        # nx, ny, nz should not change
+        # self._nz, self._ny, self._nx = self._data.shape
+        # fixme: remove
+        if self._nx is not None and self._ny is not None and self._nz is not None:
+            self._nx, self._ny, self._nz = self._nx, self._ny, self._nz
+        else:
+            self._nz, self._ny, self._nx = self._data.shape
         self._z_length, self._y_length, self._x_length = numpy.multiply(self._data.shape,
                                                                         numpy.array(self._voxel_size)[::-1])
         self._mapc, self._mapr, self._maps = self.orientation.to_integers()
@@ -560,7 +537,16 @@ class MapFile:
         dtype = self._mode_to_dtype()
         self._data = self._data.astype(dtype)
         self._amin, self._amax, self._amean = self._data.min(), self._data.max(), self._data.mean()
-        self._rms = math.sqrt(numpy.mean(numpy.square(self._data)))
+        self._rms = self._calculate_rms()
+
+    def _calculate_rms(self):
+        """Calculate the RMS taking into account data type to avoid overflow errors"""
+        if self._data.dtype in [numpy.dtype('int8'), numpy.dtype('int16')]:
+            data = self._data.astype(numpy.float32)  # make a float32 copy of the data
+        else:
+            data = self._data
+        rms = math.sqrt(numpy.mean(numpy.square(data)))
+        return rms
 
     def _dtype_to_mode(self):
         """"""
@@ -735,7 +721,7 @@ class MapFile:
                 \r{bold_yellow('Cols, rows, sections:')}{self.nc, self.nr, self.ns}
                 \r{bold_green('Mode:')}{self.mode} ({self._mode_to_dtype()})
                 \r{bold_yellow('Start col, row, sections:')}{self.start}
-                \r{bold_green('X, Y, Z:')}({self.nx}, {self.ny}, {self.nz})
+                \r{bold_green('Number of X, Y, Z intervals:')}({self.nx}, {self.ny}, {self.nz})
                 \r{bold_yellow('Voxel size:')}{prec_tuple(self.voxel_size)}
                 \r{bold_green('Lengths X, Y, Z (Ångstrom):')}{self.x_length:6f}, {self.y_length:6f}, {self.z_length:6f}
                 \r{bold_yellow(f'{alpha}, {beta}, {gamma}:')}{self.alpha}, {self.beta}, {self.gamma}
@@ -767,7 +753,7 @@ class MapFile:
                 \r{plain('Cols, rows, sections:')}{self.nc, self.nr, self.ns}
                 \r{plain('Mode:')}{self.mode} ({self._mode_to_dtype()})
                 \r{plain('Start col, row, sections:')}{self.start}
-                \r{plain('X, Y, Z:')}({self.nx}, {self.ny}, {self.nz})
+                \r{plain('Number of X, Y, Z intervals:')}({self.nx}, {self.ny}, {self.nz})
                 \r{plain('Voxel size:')}{prec_tuple(self.voxel_size)}
                 \r{plain('Lengths X, Y, Z (Ångstrom):')}{self.x_length:6f}, {self.y_length:6f}, {self.z_length:6f}
                 \r{plain(f'{alpha}, {beta}, {gamma}:')}{self.alpha}, {self.beta}, {self.gamma}

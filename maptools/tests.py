@@ -384,9 +384,9 @@ class TestExperiments(unittest.TestCase):
             )
         )
         # sanity checks
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             models.PermutationMatrix.from_orientations((1, 1, 1), (1, 2, 3))
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             models.PermutationMatrix.from_orientations((1, 1, 1), (1, 2, 2))
         with self.assertRaises(ValueError):
             models.PermutationMatrix.from_orientations((1, 2, 3), (2, 3, 4))
@@ -561,7 +561,7 @@ class TestOrientation(unittest.TestCase):
         self.assertEqual('X', orientation.rows)
         self.assertEqual('Z', orientation.sections)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             models.Orientation.from_integers((1, 1, 3))
 
     def test_from_string(self):
@@ -572,7 +572,7 @@ class TestOrientation(unittest.TestCase):
         self.assertEqual('Z', orientation.rows)
         self.assertEqual('Y', orientation.sections)
 
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             models.Orientation.from_string('XXY')
 
     def test_to_integers(self):
@@ -610,12 +610,12 @@ class TestPermutationMatrix(unittest.TestCase):
         self.assertEqual(3, permutation_matrix.cols)
         self.assertEqual(int, permutation_matrix.dtype)
         # invalid data
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             models.PermutationMatrix(
                 numpy.fromstring('0 0 0 0 0 0 0 0 1', sep=' ').reshape(3, 3)
             )
         # non-binary
-        with self.assertRaises(ValueError):
+        with self.assertRaises(AssertionError):
             models.PermutationMatrix(
                 numpy.fromstring('1 0 0 0 2 0 0 0 1', sep=' ').reshape(3, 3)
             )
@@ -766,6 +766,9 @@ class TestMapFile(unittest.TestCase):
             self.assertEqual(0.0, mapfile.s31)
             self.assertEqual(0.0, mapfile.s32)
             self.assertEqual(0.0, mapfile.s33)
+            self.assertEqual(0.0, mapfile.t1)
+            self.assertEqual(0.0, mapfile.t2)
+            self.assertEqual(0.0, mapfile.t3)
             self.assertEqual((0,) * 15, mapfile.extra)
             self.assertEqual(b'MAP ', mapfile.map)
             self.assertEqual(bytes([68, 68, 0, 0]), mapfile.machst)
@@ -811,6 +814,9 @@ class TestMapFile(unittest.TestCase):
             self.assertEqual(0.0, mapfile2.s31)
             self.assertEqual(0.0, mapfile2.s32)
             self.assertEqual(0.0, mapfile2.s33)
+            self.assertEqual(0.0, mapfile2.t1)
+            self.assertEqual(0.0, mapfile2.t2)
+            self.assertEqual(0.0, mapfile2.t3)
             self.assertEqual((0,) * 15, mapfile2.extra)
             self.assertEqual(b'MAP ', mapfile2.map)
             self.assertEqual(bytes([68, 68, 0, 0]), mapfile2.machst)
@@ -825,21 +831,30 @@ class TestMapFile(unittest.TestCase):
     def test_create_standard_then_modify_to_nonstandard(self):
         """"""
         # create
-        with models.MapFile(self.test_fn, file_mode='w') as mapfile:
-            # set data
+        with models.MapFile(self.test_fn, start=(-2, 3, -4), file_mode='w') as mapfile:
+            # set data given default orientation
             mapfile.data = numpy.random.rand(10, 20, 30)  # sections, rows, cols
-            print(f"{mapfile.data.shape}")
-            print(f"{mapfile.orientation}")
+            print(f"{mapfile.data.shape = }")
+            print(f"{mapfile.orientation = }")
             print(f"{mapfile.cols, mapfile.rows, mapfile.sections}")
-            # change orientation to nonstandar YXZ
+            self.assertEqual(30, mapfile.nc)
+            self.assertEqual(20, mapfile.nr)
+            self.assertEqual(10, mapfile.ns)
+            self.assertEqual(30, mapfile.nx)
+            self.assertEqual(20, mapfile.ny)
+            self.assertEqual(10, mapfile.nz)
+            # change orientation to nonstandard YXZ
             mapfile.orientation = models.Orientation(cols='Y', rows='X', sections='Z')
             print(f"{mapfile.data.shape}")
-            print(f"{mapfile.orientation}")
+            print(f"{mapfile.orientation.to_integers() = }")
             print(f"{mapfile.cols, mapfile.rows, mapfile.sections}")
             # now the following should be automatically inferred from the data
             self.assertEqual(20, mapfile.nc)
             self.assertEqual(30, mapfile.nr)
             self.assertEqual(10, mapfile.ns)
+            self.assertEqual(20, mapfile.nx)
+            self.assertEqual(30, mapfile.ny)
+            self.assertEqual(10, mapfile.nz)
             # change orientation to nonstandard YZX
             # S=10, R=20, C=30
             # C=30, R=20, S=10
@@ -875,7 +890,7 @@ class TestMapFile(unittest.TestCase):
             self.assertEqual(10, mapfile2.nr)
             self.assertEqual(20, mapfile2.ns)
             self.assertEqual(2, mapfile2.mode)
-            self.assertEqual((0, 0, 0), mapfile2.start)
+            self.assertEqual((-2, -4, 3), mapfile2.start)
             self.assertEqual(30, mapfile2.nx)
             self.assertEqual(10, mapfile2.ny)
             self.assertEqual(20, mapfile2.nz)
@@ -1084,7 +1099,7 @@ class TestMapFile(unittest.TestCase):
         # start with map_mode = 2
         with models.MapFile(
                 self.test_fn, 'w',
-                start=(-5, -5, -5),
+                start=(-5, -6, -7),
                 voxel_size=(1.9, 2.6, 4.2),
                 colour=True,
                 orientation=models.Orientation.from_string('YZX')
@@ -1184,6 +1199,42 @@ class TestMapFile(unittest.TestCase):
             self.assertEqual("a new label", mapfile2.get_label(0))
             self.assertEqual("ニシコクマルガラスは私のクォーツのスフィンクスが大好", mapfile2.get_label(1))
             print(mapfile2)
+
+    def test_calculate_rms(self):
+        """Test that:
+        - we do not overflow
+        - we leave the type as before
+        """
+        # int8
+        fn = f"test_{secrets.token_urlsafe(4)}.map"
+        with models.MapFile(fn, file_mode='w', map_mode=0, colour=True) as mapfile:
+            mapfile.data = numpy.random.randint(-128, 127, size=(10, 10, 10))
+            print(mapfile)
+        os.remove(fn)
+        # uint8
+        fn = f"test_{secrets.token_urlsafe(4)}.map"
+        with models.MapFile(fn, file_mode='w', map_mode=0, colour=True) as mapfile:
+            mapfile.data = numpy.random.randint(128, 255, size=(10, 10, 10))
+            print(mapfile)
+        os.remove(fn)
+        # int16
+        fn = f"test_{secrets.token_urlsafe(4)}.map"
+        with models.MapFile(fn, file_mode='w', map_mode=1, colour=True) as mapfile:
+            mapfile.data = numpy.random.randint(-(2 ** 15), 2 ** 15 - 1, size=(10, 10, 10))
+            print(mapfile)
+        os.remove(fn)
+        # uint16
+        fn = f"test_{secrets.token_urlsafe(4)}.map"
+        with models.MapFile(fn, file_mode='w', map_mode=1, colour=True) as mapfile:
+            mapfile.data = numpy.random.randint(2 ** 15, 2 ** 16 - 1, size=(10, 10, 10))
+            print(mapfile)
+        os.remove(fn)
+        # float32
+        fn = f"test_{secrets.token_urlsafe(4)}.map"
+        with models.MapFile(fn, file_mode='w', map_mode=2, colour=True) as mapfile:
+            mapfile.data = numpy.random.rand(10, 10, 10)
+            print(mapfile)
+        os.remove(fn)
 
     def test_copy(self):
         """"""
